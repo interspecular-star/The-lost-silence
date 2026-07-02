@@ -362,14 +362,14 @@ export class Engine {
   }
 
   // ---------- сцены ----------
-  gotoScene(id: string) {
+  gotoScene(id: string, suppressEnter = false) {
     const scene = this.project.scenes.find((s) => s.id === id);
     if (!scene) return;
     this.currentScene = scene;
     this.renderScene();
     this.opts.onSceneChanged?.(scene);
     this.scheduleSave();
-    if (scene.onEnterDialogueId) this.startDialogue(scene.onEnterDialogueId);
+    if (scene.onEnterDialogueId && !suppressEnter) this.startDialogue(scene.onEnterDialogueId);
   }
 
   private renderScene() {
@@ -735,10 +735,16 @@ export class Engine {
       case 'branch':
         this.advance(this.checkConditions(n.conditions) ? n.nextTrue : n.nextFalse);
         return;
-      case 'jump':
-        if (n.gotoSceneId) this.gotoScene(n.gotoSceneId);
-        this.advance(n.next);
+      case 'jump': {
+        // если после перехода диалог продолжается — подавляем onEnter новой сцены;
+        // иначе закрываем текущий бокс ДО перехода, чтобы не стереть onEnter-диалог
+        const nextNode = this.node(n.next);
+        const continues = !!nextNode && nextNode.type !== 'end';
+        if (!continues) this.endDialogue();
+        if (n.gotoSceneId) this.gotoScene(n.gotoSceneId, continues);
+        if (continues) this.showNode(nextNode!.id);
         return;
+      }
       case 'end':
         this.endDialogue();
         return;
