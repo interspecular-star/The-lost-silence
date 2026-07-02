@@ -11,3 +11,6 @@ public/runtime.js
 # системное
 Thumbs.db
 Desktop.ini
+
+# временные файлы Word
+~$*
