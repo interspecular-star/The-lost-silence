@@ -27,10 +27,30 @@ export function mountInspector(root: HTMLElement, store: Store) {
       else renderDialogue();
     } else if (store.mode === 'npc') {
       renderNPCHelp();
+    } else if (store.mode === 'items') {
+      renderItemsHelp();
     } else {
       renderVariablesHelp();
     }
   };
+
+  function renderItemsHelp() {
+    const title = h('div', { class: 'insp-title' });
+    title.append('Предметы и герой');
+    root.appendChild(title);
+    root.appendChild(section('Как играется',
+      h('div', {
+        class: 'hint',
+        text: 'В игре (не на страницах-меню) появляются:\n• полосы HP/фокуса и уровень (справа сверху)\n• кнопка 🎒 — инвентарь с манекеном\n\nВ инвентаре: перетащите предмет на слот — экипировка; клик — меню (экипировать/использовать/выбросить).\n\nРеген HP и фокуса идёт автоматически. Опыт (эффект «exp +N») сам повышает уровень и полностью лечит героя.',
+      }),
+    ));
+    root.appendChild(section('Как выдавать предметы',
+      h('div', {
+        class: 'hint',
+        text: '1. Элемент сцены → «Действие по клику» → раздел «Выдать предметы».\n2. Диалог → нода «Действие» → «Выдать предметы».\n\nТак делаются сундуки, награды за квесты и подарки NPC.',
+      }),
+    ));
+  }
 
   function renderNPCHelp() {
     const title = h('div', { class: 'insp-title' });
@@ -260,6 +280,10 @@ export function mountInspector(root: HTMLElement, store: Store) {
       actionSection.appendChild(effectsEditor(action.effects ?? [], (list) => mutate(() => {
         action.effects = list; el.action = action;
       })));
+      actionSection.appendChild(h('div', { class: 'insp-section-title', style: 'margin-top:10px;', text: 'Выдать предметы' }));
+      actionSection.appendChild(itemGrantsEditor(action.giveItems ?? [], (list) => mutate(() => {
+        action.giveItems = list.length ? list : undefined; el.action = action;
+      })));
     }
     root.appendChild(actionSection);
 
@@ -415,6 +439,10 @@ export function mountInspector(root: HTMLElement, store: Store) {
     if (node.type === 'set') {
       const sec = section('Изменить переменные');
       sec.appendChild(effectsEditor(node.effects ?? [], (list) => mutate(() => { node.effects = list; })));
+      sec.appendChild(h('div', { class: 'insp-section-title', style: 'margin-top:10px;', text: 'Выдать предметы' }));
+      sec.appendChild(itemGrantsEditor(node.giveItems ?? [], (list) => mutate(() => {
+        node.giveItems = list.length ? list : undefined;
+      })));
       root.appendChild(sec);
     }
 
@@ -456,6 +484,44 @@ export function mountInspector(root: HTMLElement, store: Store) {
     });
     ops.appendChild(delBtn);
     root.appendChild(ops);
+  }
+
+  // ================= ВЫДАЧА ПРЕДМЕТОВ =================
+  function itemGrantsEditor(
+    list: { itemId: string; qty: number }[],
+    commit: (list: { itemId: string; qty: number }[]) => void,
+  ): HTMLElement {
+    const wrap = h('div');
+    const items = store.project.items ?? [];
+    list.forEach((g, i) => {
+      const card = h('div', { class: 'cond-card' });
+      const r = h('div', { class: 'row' });
+      r.appendChild(selectInput(g.itemId, items.map((it) => [it.id, it.name] as [string, string]), (v) => {
+        const copy = list.map((x) => ({ ...x }));
+        copy[i].itemId = v;
+        commit(copy);
+      }));
+      const qty = numberInput(g.qty, (v) => {
+        const copy = list.map((x) => ({ ...x }));
+        copy[i].qty = Math.max(1, Math.round(v));
+        commit(copy);
+      });
+      qty.style.width = '60px';
+      qty.style.flex = '0 0 60px';
+      r.appendChild(qty);
+      const del = h('button', { class: 'del', text: '✕' });
+      del.onclick = () => commit(list.filter((_, j) => j !== i));
+      r.appendChild(del);
+      card.appendChild(r);
+      wrap.appendChild(card);
+    });
+    const add = h('button', { class: 'btn small', text: '+ предмет' });
+    add.onclick = () => {
+      if (items.length === 0) { toast('Сначала создайте предмет (режим «Предметы»)', true); return; }
+      commit([...list.map((x) => ({ ...x })), { itemId: items[0].id, qty: 1 }]);
+    };
+    wrap.appendChild(add);
+    return wrap;
   }
 
   // ================= РЕДАКТОРЫ УСЛОВИЙ / ЭФФЕКТОВ =================

@@ -11,6 +11,7 @@ import { StageView } from './stage';
 import { GraphView } from './graph';
 import { mountVariables } from './variables';
 import { mountNPCs } from './npcs';
+import { mountItems } from './items';
 import { registerHotkeys } from './hotkeys';
 
 const store = new Store(Store.loadAutosave() ?? seedProject());
@@ -29,6 +30,7 @@ const stageView = new StageView(store);
 const graphView = new GraphView(store);
 const varsView = mountVariables(store);
 const npcView = mountNPCs(store);
+const itemsView = mountItems(store);
 
 function renderCenter() {
   center.innerHTML = '';
@@ -40,6 +42,8 @@ function renderCenter() {
     graphView.onShow();
   } else if (store.mode === 'npc') {
     center.appendChild(npcView);
+  } else if (store.mode === 'items') {
+    center.appendChild(itemsView);
   } else {
     center.appendChild(varsView);
   }

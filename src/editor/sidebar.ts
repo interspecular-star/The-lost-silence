@@ -17,8 +17,19 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     if (store.mode === 'scene') renderScenes();
     else if (store.mode === 'dialogue') renderDialogues();
     else if (store.mode === 'npc') renderNPCInfo();
+    else if (store.mode === 'items') renderItemsInfo();
     else renderVariablesInfo();
   };
+
+  function renderItemsInfo() {
+    const s = h('div', { class: 'sb-section' });
+    s.appendChild(h('div', { class: 'sb-header' }, [h('span', { text: 'Предметы' })]));
+    s.appendChild(h('div', {
+      class: 'hint', style: 'padding:6px 12px;',
+      text: 'Манекен: 8 слотов. Ячейки: база + выносливость + сумки.\n\nВыдать предмет игроку: действие элемента сцены или нода «Действие» в диалоге → «Выдать предметы».\n\nРедкости: хлам → потёртый → добротный → высокий → легендарный → Архонт-класс.',
+    }));
+    root.appendChild(s);
+  }
 
   function renderNPCInfo() {
     const s = h('div', { class: 'sb-section' });

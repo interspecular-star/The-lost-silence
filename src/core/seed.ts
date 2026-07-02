@@ -4,8 +4,9 @@
 // Демонстрирует: NPC/отношения, фракции, Осколок, idle, {подстановку}.
 // ============================================================
 
-import { Project, uid, defaultTheme } from './types';
+import { Project, ItemDef, uid, defaultTheme } from './types';
 import { createFaction, createNPC } from './npc';
+import { ensureHeroSystem } from './hero';
 
 export function seedProject(): Project {
   // ---- обычные переменные ----
@@ -32,6 +33,7 @@ export function seedProject(): Project {
   const n8 = uid('nd');
   const n9 = uid('nd');
   const nJump = uid('nd');
+  const nGive = uid('nd');
   const nEnd = uid('nd');
 
   const project: Project = {
@@ -67,6 +69,48 @@ export function seedProject(): Project {
   const fCav = createFaction(project, 'Cavernium', '#b39cf0');
   const fAer = createFaction(project, 'Aeralis', '#7db8f0');
   const fHyd = createFaction(project, 'Hydrosynth', '#56b6c2');
+
+  // ---- герой и предметы ----
+  const heroVars = ensureHeroSystem(project);
+  const items: ItemDef[] = [
+    {
+      id: uid('item'), name: 'Комбинезон стазиса', type: 'armor', slot: 'body',
+      rarity: 'worn', price: 5,
+      stats: { def: 2 }, description: 'Истлевшая ткань 2030-х. Пахнет шестью веками ожидания.',
+    },
+    {
+      id: uid('item'), name: 'Резак Матиса', type: 'weapon', slot: 'weapon',
+      rarity: 'decent', price: 40,
+      stats: { atk: 6, crit_chance: 3 },
+      description: 'Плазменный резак для вскрытия мёртвых узлов. «Верни, когда найдёшь себе нормальный».',
+    },
+    {
+      id: uid('item'), name: 'Разгрузка кочевника', type: 'armor', slot: 'accessory',
+      rarity: 'decent', price: 30, cellsBonus: 4,
+      stats: { endur: 1 }, description: 'Ремни и подсумки Flux Nomads. +4 ячейки инвентаря.',
+    },
+    {
+      id: uid('item'), name: 'Стим-инъектор', type: 'consumable', rarity: 'decent',
+      price: 15, stack: 5,
+      useEffects: [{ varId: heroVars['hp'], op: 'add', value: 30 }],
+      description: 'Полевой медицинский стимулятор. +30 HP.',
+    },
+    {
+      id: uid('item'), name: 'Компонент мёртвого узла', type: 'resource', rarity: 'junk',
+      price: 2, stack: 20,
+      description: 'Ресурс для ремонта и улучшений (пригодится дронам-сборщикам).',
+    },
+    {
+      id: uid('item'), name: 'Ключ-карта лаборатории', type: 'resource', rarity: 'high',
+      price: 0, questItem: true,
+      description: 'Карта доступа из вашей прошлой жизни. Квестовый предмет — нельзя выбросить.',
+    },
+  ];
+  project.items = items;
+  project.hero!.startItems = [
+    { itemId: items[0].id, qty: 1 },  // комбинезон
+    { itemId: items[5].id, qty: 1 },  // ключ-карта
+  ];
 
   // ---- NPC ----
   const matis = createNPC(project, 'Матис', fFlux.id);
@@ -231,7 +275,18 @@ export function seedProject(): Project {
         {
           id: n8, type: 'line', x: 1260, y: 280,
           speakerNpcId: matis.id,
-          text: 'Держись за меня — выведу. Только уговор: про то, что ты «до-сетевой», молчим. Есть системы, которым лучше о тебе не знать.',
+          text: 'Держись за меня — выведу. Держи резак и стимы — там, куда идём, пригодятся. Только уговор: про то, что ты «до-сетевой», молчим.',
+          next: nGive,
+        },
+        {
+          // выдача предметов + опыт за первый контакт
+          id: nGive, type: 'set', x: 1260, y: 160,
+          giveItems: [
+            { itemId: items[1].id, qty: 1 },
+            { itemId: items[2].id, qty: 1 },
+            { itemId: items[3].id, qty: 3 },
+          ],
+          effects: [{ varId: heroVars['exp'], op: 'add', value: 40 }],
           next: nJump,
         },
         {

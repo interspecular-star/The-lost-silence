@@ -31,6 +31,7 @@ export function mountTopbar(root: HTMLElement, store: Store) {
       ['scene', '🖼 Сцены'],
       ['dialogue', '💬 Диалоги'],
       ['npc', '👤 Персонажи'],
+      ['items', '🎒 Предметы'],
       ['variables', '🧮 Переменные'],
     ];
     const modeGroup = h('div', { class: 'tb-mode' });

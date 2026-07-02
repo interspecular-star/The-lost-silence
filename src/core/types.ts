@@ -18,8 +18,9 @@ export interface VariableDef {
   initial: VarValue;
   // general/reputation — редактируются в таблице переменных;
   // npc — авто-переменные персонажей (отношение, знакомство), живут в редакторе персонажей;
-  // computed — вычисляемые движком (репутация фракций), менять эффектами нельзя
-  category: 'general' | 'reputation' | 'npc' | 'computed';
+  // hero — авто-переменные героя (lvl, exp, hp, foc), настраиваются в режиме «Предметы»;
+  // computed — вычисляемые движком (репутация фракций, характеристики), менять эффектами нельзя
+  category: 'general' | 'reputation' | 'npc' | 'hero' | 'computed';
   description?: string;
   tracked?: boolean;       // показывать в панели отслеживания при предпросмотре
 }
@@ -46,6 +47,7 @@ export interface ElementAction {
   sceneId?: string;
   dialogueId?: string;
   effects?: Effect[];
+  giveItems?: ItemGrant[];   // выдать предметы при клике
 }
 
 // ---------- Элементы сцены ----------
@@ -131,6 +133,7 @@ export interface DialogueNode {
   choices?: DialogueChoice[];
   // set
   effects?: Effect[];
+  giveItems?: ItemGrant[];   // выдать предметы (нода «Действие»)
   // branch
   conditions?: Condition[];
   nextTrue?: string | null;
@@ -168,6 +171,62 @@ export interface NPC {
   relationVarId: string;     // авто-переменная category:'npc' — отношение 0..100
   metVarId: string;          // авто-переменная category:'npc' — знаком ли игрок (boolean)
 }
+
+// ---------- Предметы и герой ----------
+export type ItemSlot = 'head' | 'body' | 'legs' | 'feet' | 'hands' | 'weapon' | 'gadget' | 'accessory';
+export type ItemType = 'weapon' | 'armor' | 'gadget' | 'consumable' | 'resource';
+export type Rarity = 'junk' | 'worn' | 'decent' | 'high' | 'legendary' | 'archon';
+// ключи боевых характеристик (bonus-статы предметов и рост героя)
+export type StatKey = 'hp_max' | 'foc_max' | 'atk' | 'agi' | 'crit_pow' | 'crit_chance' | 'def' | 'endur';
+
+export interface ItemDef {
+  id: string;
+  name: string;
+  type: ItemType;
+  slot?: ItemSlot;           // для экипируемых (weapon/armor/gadget)
+  rarity: Rarity;
+  icon?: string;             // data-URI; нет — авто-плейсхолдер по типу и редкости
+  description?: string;
+  price: number;
+  stack?: number;            // макс. в одной ячейке (ресурсы/расходники), по умолчанию 1
+  questItem?: boolean;       // нельзя продать/выбросить
+  stats?: Partial<Record<StatKey, number>>; // бонусы при экипировке
+  cellsBonus?: number;       // + ячейки инвентаря (сумки)
+  useEffects?: Effect[];     // расходник: эффекты при использовании (предмет тратится)
+}
+
+export interface ItemGrant { itemId: string; qty: number; }
+
+export interface HeroConfig {
+  baseStats: Record<StatKey, number>;   // характеристики на 1 уровне
+  growth: Partial<Record<StatKey, number>>; // прирост за уровень
+  baseCells: number;                    // базовые ячейки инвентаря
+  cellsPerEndur: number;                // + ячеек за единицу выносливости
+  regenHp: number;                      // hp в секунду вне боя
+  regenFoc: number;                     // foc в секунду вне боя
+  startItems: ItemGrant[];              // стартовый инвентарь
+}
+
+export const ITEM_SLOT_LABELS: Record<ItemSlot, string> = {
+  head: 'Голова', body: 'Тело', legs: 'Ноги', feet: 'Обувь',
+  hands: 'Перчатки', weapon: 'Оружие', gadget: 'Гаджет', accessory: 'Аксессуар',
+};
+export const ITEM_TYPE_LABELS: Record<ItemType, string> = {
+  weapon: 'Оружие', armor: 'Одежда/броня', gadget: 'Гаджет',
+  consumable: 'Расходник', resource: 'Ресурс',
+};
+export const RARITY_META: Record<Rarity, { label: string; color: string; order: number }> = {
+  junk: { label: 'Хлам', color: '#8a949e', order: 0 },
+  worn: { label: 'Потёртый', color: '#b8c2ac', order: 1 },
+  decent: { label: 'Добротный', color: '#7db8f0', order: 2 },
+  high: { label: 'Высокий', color: '#b39cf0', order: 3 },
+  legendary: { label: 'Легендарный', color: '#e5c07b', order: 4 },
+  archon: { label: 'Архонт-класс', color: '#4fd1c5', order: 5 },
+};
+export const STAT_LABELS: Record<StatKey, string> = {
+  hp_max: 'Макс. HP', foc_max: 'Макс. фокус', atk: 'Сила атаки', agi: 'Ловкость',
+  crit_pow: 'Сила крита %', crit_chance: 'Шанс крита %', def: 'Защита', endur: 'Выносливость',
+};
 
 // ---------- Idle-правила (пассивный прогресс) ----------
 export interface IdleRule {
@@ -207,6 +266,8 @@ export interface Project {
   idleRules?: IdleRule[];
   factions?: Faction[];
   npcs?: NPC[];
+  items?: ItemDef[];
+  hero?: HeroConfig;
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;
   theme: Theme;
