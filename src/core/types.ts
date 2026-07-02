@@ -41,13 +41,16 @@ export interface Effect {
 }
 
 // ---------- Действия элементов ----------
-export type ActionType = 'none' | 'gotoScene' | 'startDialogue' | 'setVars';
+export type ActionType = 'none' | 'gotoScene' | 'startDialogue' | 'setVars' | 'startCombat';
 export interface ElementAction {
   type: ActionType;
   sceneId?: string;
   dialogueId?: string;
   effects?: Effect[];
   giveItems?: ItemGrant[];   // выдать предметы при клике
+  mobId?: string;            // startCombat: противник
+  winDialogueId?: string;    // диалог после победы (опционально)
+  loseDialogueId?: string;   // диалог после поражения (опционально)
 }
 
 // ---------- Элементы сцены ----------
@@ -228,6 +231,24 @@ export const STAT_LABELS: Record<StatKey, string> = {
   crit_pow: 'Сила крита %', crit_chance: 'Шанс крита %', def: 'Защита', endur: 'Выносливость',
 };
 
+// ---------- Мобы и бой ----------
+export interface MobDrop { itemId: string; qty: number; chance: number; } // chance 0..100
+
+export interface MobDef {
+  id: string;
+  name: string;
+  icon?: string;             // data-URI; нет — авто-плейсхолдер
+  description?: string;
+  hp: number;
+  atk: number;               // урон за атаку (до вычета защиты)
+  telegraphMs: number;       // длительность замаха (окно реакции игрока)
+  def: number;               // защита моба
+  critChance?: number;       // % шанс крита моба
+  expReward: number;
+  creditsReward?: number;
+  drops: MobDrop[];
+}
+
 // ---------- Idle-правила (пассивный прогресс) ----------
 export interface IdleRule {
   id: string;
@@ -268,8 +289,11 @@ export interface Project {
   npcs?: NPC[];
   items?: ItemDef[];
   hero?: HeroConfig;
+  mobs?: MobDef[];
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;
+  // имя переменной валюты для правого края HUD (по умолчанию 'credits')
+  currencyVarName?: string;
   theme: Theme;
 }
 

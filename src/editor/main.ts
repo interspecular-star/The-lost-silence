@@ -12,6 +12,7 @@ import { GraphView } from './graph';
 import { mountVariables } from './variables';
 import { mountNPCs } from './npcs';
 import { mountItems } from './items';
+import { mountMobs } from './mobs';
 import { registerHotkeys } from './hotkeys';
 
 const store = new Store(Store.loadAutosave() ?? seedProject());
@@ -31,6 +32,7 @@ const graphView = new GraphView(store);
 const varsView = mountVariables(store);
 const npcView = mountNPCs(store);
 const itemsView = mountItems(store);
+const mobsView = mountMobs(store);
 
 function renderCenter() {
   center.innerHTML = '';
@@ -44,6 +46,8 @@ function renderCenter() {
     center.appendChild(npcView);
   } else if (store.mode === 'items') {
     center.appendChild(itemsView);
+  } else if (store.mode === 'mobs') {
+    center.appendChild(mobsView);
   } else {
     center.appendChild(varsView);
   }

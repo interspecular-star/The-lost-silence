@@ -18,8 +18,19 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     else if (store.mode === 'dialogue') renderDialogues();
     else if (store.mode === 'npc') renderNPCInfo();
     else if (store.mode === 'items') renderItemsInfo();
+    else if (store.mode === 'mobs') renderMobsInfo();
     else renderVariablesInfo();
   };
+
+  function renderMobsInfo() {
+    const s = h('div', { class: 'sb-section' });
+    s.appendChild(h('div', { class: 'sb-header' }, [h('span', { text: 'Бои' })]));
+    s.appendChild(h('div', {
+      class: 'hint', style: 'padding:6px 12px;',
+      text: 'Пошаговый QTE-бой:\n• Атака / Спецудар (25 фокуса, ×1.8)\n• Замах моба → Уклон (широкое окно) или Парирование (узкое, отражает 50% и даёт +10 фокуса)\n\nЗапуск: элемент сцены → действие «Начать бой». После победы/поражения можно запустить диалог.',
+    }));
+    root.appendChild(s);
+  }
 
   function renderItemsInfo() {
     const s = h('div', { class: 'sb-section' });

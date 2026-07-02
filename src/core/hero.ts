@@ -5,7 +5,7 @@
 // ============================================================
 
 import {
-  Project, HeroConfig, ItemDef, StatKey, VariableDef, VarValue,
+  Project, HeroConfig, ItemDef, MobDef, StatKey, VariableDef, VarValue,
   RARITY_META, uid,
 } from './types';
 
@@ -116,6 +116,22 @@ export function materializeHeroStats(
   if (hpId) state[hpId] = Math.max(0, Math.min(Number(state[hpId] ?? 0), stats.hp_max));
   const focId = heroVarId(project, 'foc');
   if (focId) state[focId] = Math.max(0, Math.min(Number(state[focId] ?? 0), stats.foc_max));
+}
+
+/** Иконка-плейсхолдер моба */
+export function mobIcon(mob: MobDef): string {
+  if (mob.icon) return mob.icon;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+<defs><radialGradient id="g" cx="50%" cy="40%" r="75%">
+<stop offset="0%" stop-color="#2a1a1e"/><stop offset="100%" stop-color="#120d10"/>
+</radialGradient></defs>
+<rect width="96" height="96" rx="12" fill="url(#g)"/>
+<rect width="96" height="96" rx="12" fill="none" stroke="#e06c75" stroke-opacity="0.8" stroke-width="2.5"/>
+<circle cx="35" cy="42" r="6" fill="#e06c75"/>
+<circle cx="61" cy="42" r="6" fill="#e06c75"/>
+<path d="M30 68 L40 61 L48 68 L56 61 L66 68" stroke="#e06c75" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+</svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
 }
 
 /** Иконка-плейсхолдер предмета: глиф типа в рамке цвета редкости */

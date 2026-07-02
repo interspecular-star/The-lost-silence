@@ -4,7 +4,7 @@
 
 import { Project, Scene, Dialogue, SceneElement, DialogueNode, VariableDef, deepClone } from './types';
 
-export type EditorMode = 'scene' | 'dialogue' | 'npc' | 'items' | 'variables';
+export type EditorMode = 'scene' | 'dialogue' | 'npc' | 'items' | 'mobs' | 'variables';
 
 export type StoreEvent =
   | 'project'      // проект заменён целиком (загрузка)

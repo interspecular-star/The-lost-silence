@@ -42,6 +42,7 @@ export function seedProject(): Project {
     startSceneId: sMenu,
     theme: defaultTheme(),
     oskolokVarName: 'oskolok',
+    currencyVarName: 'credits',
     factions: [],
     npcs: [],
     idleRules: [
@@ -110,6 +111,18 @@ export function seedProject(): Project {
   project.hero!.startItems = [
     { itemId: items[0].id, qty: 1 },  // комбинезон
     { itemId: items[5].id, qty: 1 },  // ключ-карта
+  ];
+
+  // ---- мобы ----
+  const mobDrone = uid('mob');
+  project.mobs = [
+    {
+      id: mobDrone, name: 'Сорванный дрон-охранник',
+      hp: 45, atk: 9, def: 2, telegraphMs: 1500, critChance: 5,
+      expReward: 70, creditsReward: 15,
+      drops: [{ itemId: items[4].id, qty: 2, chance: 80 }], // компоненты узла
+      description: 'Охранная автоматика лаборатории. 600 лет без обслуживания — протоколы сорваны.',
+    },
   ];
 
   // ---- NPC ----
@@ -186,12 +199,6 @@ export function seedProject(): Project {
       guides: [],
       elements: [
         {
-          id: uid('el'), name: 'Счётчик кредитов', type: 'text',
-          x: 1460, y: 40, w: 420, h: 50,
-          text: '⌬ Кредиты: {credits}',
-          style: { textColor: '#4fd1c5', fontSize: 26, textAlign: 'right', letterSpacing: 2 },
-        },
-        {
           id: uid('el'), name: 'Описание', type: 'text',
           x: 310, y: 360, w: 1300, h: 260,
           text: 'Лаборатория умирала шесть веков — и почти закончила.\n\nКоррозия съела маркировку на стенах. Матис уже возится с дверным контуром.\n\nЗдесь начинается ваш путь в мир, который вас не ждал.',
@@ -200,11 +207,19 @@ export function seedProject(): Project {
         {
           // демо систем: выдать Осколок ур.2 → появится шкала отношений и панель фракций ◈
           id: uid('el'), name: 'Кнопка «Осколок» (демо)', type: 'button',
-          x: 660, y: 700, w: 600, h: 70,
+          x: 360, y: 700, w: 560, h: 70,
           text: 'Надеть Осколок (демо: откроет репутацию)',
           style: { fill: 'rgba(79,209,197,0.08)', textColor: '#4fd1c5', fontSize: 24, radius: 6, borderColor: '#2a6f68', borderWidth: 1, textAlign: 'center' },
           action: { type: 'setVars', effects: [{ varId: vOskolok, op: 'set', value: 2 }] },
           visibleIf: [{ varId: vOskolok, op: 'lt', value: 2 }],
+        },
+        {
+          // демо боя
+          id: uid('el'), name: 'Кнопка «Бой» (демо)', type: 'button',
+          x: 1000, y: 700, w: 560, h: 70,
+          text: '⚔ Дрон-охранник активировался! (демо боя)',
+          style: { fill: 'rgba(224,108,117,0.08)', textColor: '#e06c75', fontSize: 24, radius: 6, borderColor: '#7a3a40', borderWidth: 1, textAlign: 'center' },
+          action: { type: 'startCombat', mobId: mobDrone },
         },
       ],
     },

@@ -263,7 +263,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     const actionSection = section('Действие по клику');
     const action = el.action ?? { type: 'none' as const };
     actionSection.appendChild(row('Тип', selectInput(action.type,
-      [['none', '— нет —'], ['gotoScene', 'Перейти в сцену'], ['startDialogue', 'Запустить диалог'], ['setVars', 'Изменить переменные']],
+      [['none', '— нет —'], ['gotoScene', 'Перейти в сцену'], ['startDialogue', 'Запустить диалог'], ['setVars', 'Изменить переменные'], ['startCombat', 'Начать бой']],
       (v) => mutate(() => { el.action = { type: v as typeof action.type, effects: el.action?.effects }; }))));
     if (action.type === 'gotoScene') {
       actionSection.appendChild(row('Сцена', selectInput(action.sceneId ?? '',
@@ -274,6 +274,17 @@ export function mountInspector(root: HTMLElement, store: Store) {
       actionSection.appendChild(row('Диалог', selectInput(action.dialogueId ?? '',
         [['', '— выберите —'], ...store.project.dialogues.map((d) => [d.id, d.name] as [string, string])],
         (v) => mutate(() => { action.dialogueId = v || undefined; el.action = action; }))));
+    }
+    if (action.type === 'startCombat') {
+      const dlgOpts: [string, string][] = [['', '— ничего —'], ...store.project.dialogues.map((d) => [d.id, d.name] as [string, string])];
+      actionSection.appendChild(row('Противник', selectInput(action.mobId ?? '',
+        [['', '— выберите —'], ...(store.project.mobs ?? []).map((m) => [m.id, m.name] as [string, string])],
+        (v) => mutate(() => { action.mobId = v || undefined; el.action = action; }))));
+      actionSection.appendChild(row('Победа →', selectInput(action.winDialogueId ?? '', dlgOpts,
+        (v) => mutate(() => { action.winDialogueId = v || undefined; el.action = action; }))));
+      actionSection.appendChild(row('Поражение →', selectInput(action.loseDialogueId ?? '', dlgOpts,
+        (v) => mutate(() => { action.loseDialogueId = v || undefined; el.action = action; }))));
+      actionSection.appendChild(h('div', { class: 'hint', text: 'Поражение не убивает: герой остаётся с 1 HP. Награды (опыт, кредиты, дроп) настраиваются в карточке моба.' }));
     }
     if (action.type !== 'none') {
       actionSection.appendChild(h('div', { class: 'insp-section-title', style: 'margin-top:10px;', text: 'Эффекты при клике' }));

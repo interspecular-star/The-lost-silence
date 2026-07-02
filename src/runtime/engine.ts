@@ -13,6 +13,7 @@ import { materializeFactionReps, computeFactionRep, npcPortrait } from '../core/
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
 } from '../core/hero';
+import { runCombat } from './combat';
 
 interface InvCell { itemId: string; qty: number; }
 
@@ -48,6 +49,8 @@ export class Engine {
   equipment: Partial<Record<ItemSlot, string>> = {};
   private invOpen = false;
   private notices: HTMLElement[] = [];
+  /** true во время боя — реген приостановлен */
+  inCombat = false;
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
   private tickTimer: number | undefined;
@@ -189,7 +192,7 @@ export class Engine {
 
   /** Реген hp/foc вне боя (1 секунда) */
   private regenTick() {
-    if (!this.heroEnabled || !this.project.hero) return;
+    if (!this.heroEnabled || !this.project.hero || this.inCombat) return;
     const hpId = heroVarId(this.project, 'hp');
     const focId = heroVarId(this.project, 'foc');
     const hpMaxId = heroVarId(this.project, 'hp_max');
@@ -369,13 +372,13 @@ export class Engine {
     this.renderOskolokHUD();
   }
 
-  /** Полосы hp/foc, уровень, кнопка инвентаря (не на страницах-меню) */
+  /** Единый HUD-бар: слева уровень/hp/foc + инвентарь, справа кредиты (не на страницах-меню) */
   private renderHeroHUD() {
     if (!this.heroEnabled) return;
     if (this.currentScene?.kind === 'page') return;
     const v = (name: string) => Number(this.state[heroVarId(this.project, name) ?? ''] ?? 0);
     const wrap = document.createElement('div');
-    wrap.style.cssText = `position:absolute;top:2.5%;right:2%;display:flex;align-items:center;
+    wrap.style.cssText = `position:absolute;top:2.5%;left:calc(2% + 2.1em);display:flex;align-items:center;
       gap:0.5em;pointer-events:none;`;
 
     const lvl = document.createElement('div');
@@ -413,6 +416,20 @@ export class Engine {
     wrap.appendChild(inv);
 
     this.hudLayer.appendChild(wrap);
+
+    // кредиты — правый край HUD
+    const curName = this.project.currencyVarName ?? 'credits';
+    const curId = heroVarId(this.project, curName);
+    if (curId) {
+      const cred = document.createElement('div');
+      cred.textContent = `⌬ ${Math.floor(Number(this.state[curId] ?? 0))}`;
+      cred.title = this.project.variables.find((x) => x.id === curId)?.title ?? 'Кредиты';
+      cred.style.cssText = `position:absolute;top:2.5%;right:2%;height:1.7em;display:flex;
+        align-items:center;padding:0 0.7em;border-radius:0.4em;background:rgba(10,16,22,0.85);
+        border:1px solid ${this.project.theme.accent}55;color:${this.project.theme.accent};
+        font-size:0.85em;letter-spacing:1px;`;
+      this.hudLayer.appendChild(cred);
+    }
   }
 
   private renderOskolokHUD() {
@@ -549,6 +566,15 @@ export class Engine {
     if (a.effects) this.applyEffects(a.effects);
     if (a.type === 'gotoScene' && a.sceneId) this.gotoScene(a.sceneId);
     if (a.type === 'startDialogue' && a.dialogueId) this.startDialogue(a.dialogueId);
+    if (a.type === 'startCombat' && a.mobId) {
+      const mob = this.project.mobs?.find((m) => m.id === a.mobId);
+      if (!mob || this.inCombat) return;
+      runCombat(this, mob, (winRes) => {
+        this.renderScene();
+        const dlgId = winRes ? a.winDialogueId : a.loseDialogueId;
+        if (dlgId) this.startDialogue(dlgId);
+      });
+    }
   }
 
   // ---------- операции с предметами ----------
@@ -625,7 +651,7 @@ export class Engine {
   }
 
   /** Всплывающее уведомление в игре */
-  private notify(text: string, color = '#cfd9e2') {
+  notify(text: string, color = '#cfd9e2') {
     const n = document.createElement('div');
     n.textContent = text;
     n.style.cssText = `position:absolute;right:2%;bottom:${6 + this.notices.length * 7}%;
