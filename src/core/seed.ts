@@ -15,6 +15,8 @@ export function seedProject(): Project {
   const vKnowsTruth = uid('var');
   const vCredits = uid('var');
   const vOskolok = uid('var');
+  const vKills = uid('var');
+  const idleContracts = uid('idle');
 
   // ---- сцены ----
   const sMenu = uid('scene');
@@ -47,7 +49,7 @@ export function seedProject(): Project {
     npcs: [],
     idleRules: [
       {
-        id: uid('idle'), title: 'Контракты Flux Nomads (пример idle)',
+        id: idleContracts, title: 'Контракты Flux Nomads (пример idle)',
         varId: vCredits, ratePerMin: 2, max: 1000, offline: true, enabled: true,
       },
     ],
@@ -57,6 +59,7 @@ export function seedProject(): Project {
       { id: vMeshTrust, name: 'mesh_trust', title: 'Доверие к Mesh', type: 'number', initial: 0, category: 'general', tracked: true, description: 'Насколько ГГ принимает второй голос' },
       { id: vKnowsTruth, name: 'knows_truth', title: 'Знает правду о 2034', type: 'boolean', initial: false, category: 'general', tracked: true, description: 'Узнал ли игрок правду о катастрофе' },
       { id: vCredits, name: 'credits', title: 'Кредиты', type: 'number', initial: 0, category: 'general', description: 'Валюта контрактов (idle-доход)' },
+      { id: vKills, name: 'kills_total', title: 'Побед в боях', type: 'number', initial: 0, category: 'general', description: 'Движок увеличивает сам после каждой победы' },
     ],
     scenes: [],
     dialogues: [],
@@ -106,6 +109,11 @@ export function seedProject(): Project {
       price: 0, questItem: true,
       description: 'Карта доступа из вашей прошлой жизни. Квестовый предмет — нельзя выбросить.',
     },
+    {
+      id: uid('item'), name: 'Фрагмент OldNet', type: 'resource', rarity: 'legendary',
+      price: 0, stack: 5,
+      description: 'Зашифрованный обрывок старого интернета. Расшифровывается в Журнале (⌬ OldNet).',
+    },
   ];
   project.items = items;
   project.hero!.startItems = [
@@ -120,8 +128,29 @@ export function seedProject(): Project {
       id: mobDrone, name: 'Сорванный дрон-охранник',
       hp: 45, atk: 9, def: 2, telegraphMs: 1500, critChance: 5,
       expReward: 70, creditsReward: 15,
-      drops: [{ itemId: items[4].id, qty: 2, chance: 80 }], // компоненты узла
+      drops: [
+        { itemId: items[4].id, qty: 2, chance: 80 },   // компоненты узла
+        { itemId: items[6].id, qty: 1, chance: 100 },  // фрагмент OldNet (демо)
+      ],
       description: 'Охранная автоматика лаборатории. 600 лет без обслуживания — протоколы сорваны.',
+    },
+  ];
+
+  // ---- журнал: задания, улучшения, расшифровка ----
+  project.upgrades = [
+    {
+      id: uid('up'), title: 'Дрон-сборщик', maxLevel: 5,
+      costVarName: 'credits', costBase: 50, costGrowth: 1.6,
+      targetIdleRuleId: idleContracts, ratePerLevel: 1, enabled: true,
+      description: 'Восстановленный дрон приносит дополнительные контрактные кредиты.',
+    },
+  ];
+  project.decodes = [
+    {
+      id: uid('dec'), title: 'Обрывок новостной ленты — весна 2034',
+      itemId: items[6].id, durationMin: 1, enabled: true, // 1 мин — для демо; в реальной игре часы
+      rewardText: '«…Комиссия по инцидентам публикует финальный отчёт: причины синхронного отказа биометрических реестров установить не удалось. Списки пропавших закрыты по требованию…»\n\n[Дальше данные повреждены. Но дата отчёта — за три дня ДО официальной даты катастрофы.]',
+      rewardEffects: [{ varId: vKnowsTruth, op: 'set', value: true }, { varId: vCredits, op: 'add', value: 40 }],
     },
   ];
 
@@ -138,6 +167,32 @@ export function seedProject(): Project {
   const sajla = createNPC(project, 'Сайла', fHyd.id);
   sajla.weight = 6;
   sajla.description = 'Куратор глубинных архивов Hydrosynth. Интересуется OldNet (пример: влиятельный NPC).';
+
+  // ---- задания (нужны id переменных NPC, поэтому после их создания) ----
+  project.quests = [
+    {
+      id: uid('q'), title: 'Контракт дня: доверие кочевника', kind: 'daily',
+      description: 'Поддерживайте отношения с Матисом (10+). Flux Nomads платят за надёжных.',
+      conditions: [{ varId: matis.relationVarId, op: 'gte', value: 10 }],
+      rewardEffects: [{ varId: vCredits, op: 'add', value: 25 }],
+      enabled: true,
+    },
+    {
+      id: uid('q'), title: 'Недельная зачистка', kind: 'weekly',
+      description: 'Победите хотя бы одного противника за неделю.',
+      conditions: [{ varId: vKills, op: 'gte', value: 1 }],
+      rewardEffects: [{ varId: vCredits, op: 'add', value: 50 }],
+      rewardItems: [{ itemId: items[3].id, qty: 2 }], // стимы
+      enabled: true,
+    },
+    {
+      id: uid('q'), title: 'Первая правда', kind: 'story',
+      description: 'Расшифруйте фрагмент OldNet и узнайте, что скрывает официальная история.',
+      conditions: [{ varId: vKnowsTruth, op: 'eq', value: true }],
+      rewardEffects: [{ varId: vSilence, op: 'add', value: 10 }],
+      enabled: true,
+    },
+  ];
 
   // ---- сцены ----
   project.scenes = [

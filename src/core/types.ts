@@ -249,6 +249,45 @@ export interface MobDef {
   drops: MobDrop[];
 }
 
+// ---------- Задания ----------
+export type QuestKind = 'daily' | 'weekly' | 'story';
+export interface QuestDef {
+  id: string;
+  title: string;
+  description?: string;
+  kind: QuestKind;           // daily/weekly можно забирать раз в сутки/неделю, story — один раз
+  conditions: Condition[];   // условия выполнения (все должны быть верны)
+  rewardEffects?: Effect[];
+  rewardItems?: ItemGrant[];
+  enabled: boolean;
+}
+
+// ---------- Улучшения (idle-прокачка: дроны, контракты) ----------
+export interface UpgradeDef {
+  id: string;
+  title: string;
+  description?: string;
+  maxLevel: number;
+  costVarName: string;       // имя переменной-валюты ('credits')
+  costBase: number;          // цена уровня N = costBase × costGrowth^N (N с нуля)
+  costGrowth: number;
+  targetIdleRuleId?: string; // какое idle-правило усиливает
+  ratePerLevel: number;      // + к приросту/мин за каждый уровень
+  enabled: boolean;
+}
+
+// ---------- Расшифровка фрагментов OldNet ----------
+export interface DecodeDef {
+  id: string;
+  title: string;
+  itemId: string;            // предмет-фрагмент (тратится при запуске)
+  durationMin: number;       // реальное время расшифровки
+  rewardText?: string;       // кусок правды — показывается по завершении
+  rewardEffects?: Effect[];
+  rewardItems?: ItemGrant[];
+  enabled: boolean;
+}
+
 // ---------- Idle-правила (пассивный прогресс) ----------
 export interface IdleRule {
   id: string;
@@ -290,6 +329,9 @@ export interface Project {
   items?: ItemDef[];
   hero?: HeroConfig;
   mobs?: MobDef[];
+  quests?: QuestDef[];
+  upgrades?: UpgradeDef[];
+  decodes?: DecodeDef[];
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;
   // имя переменной валюты для правого края HUD (по умолчанию 'credits')

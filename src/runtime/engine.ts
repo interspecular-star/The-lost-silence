@@ -14,6 +14,7 @@ import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
 } from '../core/hero';
 import { runCombat } from './combat';
+import { renderJournal } from './journal';
 
 interface InvCell { itemId: string; qty: number; }
 
@@ -30,6 +31,9 @@ interface SaveData {
   savedAt: number;
   inv?: InvCell[];
   equip?: Partial<Record<ItemSlot, string>>;
+  claims?: Record<string, string>;          // задания: id → ключ сброса
+  ups?: Record<string, number>;             // улучшения: id → уровень
+  decode?: { defId: string; startedAt: number } | null;
 }
 
 export class Engine {
@@ -51,6 +55,11 @@ export class Engine {
   private notices: HTMLElement[] = [];
   /** true во время боя — реген приостановлен */
   inCombat = false;
+
+  // журнал: задания / улучшения / расшифровка
+  questClaims: Record<string, string> = {};
+  upgradeLevels: Record<string, number> = {};
+  activeDecode: { defId: string; startedAt: number } | null = null;
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
   private tickTimer: number | undefined;
@@ -129,6 +138,9 @@ export class Engine {
         }
         this.inventory = save.inv ?? [];
         this.equipment = save.equip ?? {};
+        this.questClaims = save.claims ?? {};
+        this.upgradeLevels = save.ups ?? {};
+        this.activeDecode = save.decode ?? null;
         if (save.sceneId && this.project.scenes.some((s) => s.id === save.sceneId)) {
           startId = save.sceneId;
         }
@@ -221,6 +233,21 @@ export class Engine {
     }
   }
 
+  /** Эффективная скорость idle-правила с учётом купленных улучшений */
+  effectiveRate(ruleId: string, base: number): number {
+    let rate = base;
+    for (const up of this.project.upgrades ?? []) {
+      if (!up.enabled || up.targetIdleRuleId !== ruleId) continue;
+      rate += (this.upgradeLevels[up.id] ?? 0) * up.ratePerLevel;
+    }
+    return rate;
+  }
+
+  /** Немедленно запланировать сохранение (для журнала) */
+  saveNow() {
+    this.scheduleSave();
+  }
+
   /** Начисляет idle-прирост за minutes минут. offlineOnly=true — только правила с offline. */
   private applyIdle(minutes: number, offlineOnly: boolean) {
     const rules = this.project.idleRules?.filter((r) => r.enabled) ?? [];
@@ -229,7 +256,7 @@ export class Engine {
       if (offlineOnly && !r.offline) continue;
       if (!this.checkConditions(r.conditions)) continue;
       const cur = Number(this.state[r.varId] ?? 0);
-      let next = cur + r.ratePerMin * minutes;
+      let next = cur + this.effectiveRate(r.id, r.ratePerMin) * minutes;
       if (r.max !== undefined) next = Math.min(next, Math.max(cur, r.max));
       if (next !== cur) {
         this.state[r.varId] = Math.round(next * 1000) / 1000;
@@ -269,6 +296,9 @@ export class Engine {
           savedAt: Date.now(),
           inv: this.inventory,
           equip: this.equipment,
+          claims: this.questClaims,
+          ups: this.upgradeLevels,
+          decode: this.activeDecode,
         };
         localStorage.setItem(this.saveKey(), JSON.stringify(data));
       } catch { /* нет доступа к хранилищу */ }
@@ -414,6 +444,18 @@ export class Engine {
       cursor:pointer;pointer-events:auto;user-select:none;`;
     inv.onclick = () => { this.invOpen = !this.invOpen; this.renderInventory(); };
     wrap.appendChild(inv);
+
+    // журнал (задания/улучшения/OldNet) — если в проекте есть содержимое
+    const hasJournal = (this.project.quests?.length ?? 0) + (this.project.upgrades?.length ?? 0)
+      + (this.project.decodes?.length ?? 0) > 0;
+    if (hasJournal) {
+      const j = document.createElement('div');
+      j.textContent = '📋';
+      j.title = 'Журнал: задания, улучшения, OldNet';
+      j.style.cssText = inv.style.cssText;
+      j.onclick = () => this.openJournal();
+      wrap.appendChild(j);
+    }
 
     this.hudLayer.appendChild(wrap);
 
@@ -835,6 +877,13 @@ export class Engine {
       // нет доступных вариантов — диалог не должен зависнуть
       this.endDialogue();
     }
+  }
+
+  /** Открыть журнал (закрывает инвентарь) */
+  openJournal() {
+    this.invOpen = false;
+    this.invLayer.innerHTML = '';
+    renderJournal(this, this.invLayer, () => { this.invLayer.innerHTML = ''; this.renderHUD(); });
   }
 
   // ---------- инвентарь (экран) ----------

@@ -19,8 +19,19 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     else if (store.mode === 'npc') renderNPCInfo();
     else if (store.mode === 'items') renderItemsInfo();
     else if (store.mode === 'mobs') renderMobsInfo();
+    else if (store.mode === 'quests') renderQuestsInfo();
     else renderVariablesInfo();
   };
+
+  function renderQuestsInfo() {
+    const s = h('div', { class: 'sb-section' });
+    s.appendChild(h('div', { class: 'sb-header' }, [h('span', { text: 'Журнал' })]));
+    s.appendChild(h('div', {
+      class: 'hint', style: 'padding:6px 12px;',
+      text: 'Ежедневный ритм игры:\n\n• Задания — суточные/недельные/сюжетные, награды за условия\n• Улучшения — прокачка idle-дохода (дроны, контракты)\n• OldNet — фрагменты расшифровываются реальным временем и выдают куски правды о 2034\n\nИгрок открывает всё это кнопкой 📋 в игре.\n\nСовет: движок сам считает переменную kills_total (победы в боях), если создать её в «Переменных» — удобно для заданий.',
+    }));
+    root.appendChild(s);
+  }
 
   function renderMobsInfo() {
     const s = h('div', { class: 'sb-section' });

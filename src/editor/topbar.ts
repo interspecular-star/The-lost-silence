@@ -33,6 +33,7 @@ export function mountTopbar(root: HTMLElement, store: Store) {
       ['npc', '👤 Персонажи'],
       ['items', '🎒 Предметы'],
       ['mobs', '⚔ Мобы'],
+      ['quests', '📋 Журнал'],
       ['variables', '🧮 Переменные'],
     ];
     const modeGroup = h('div', { class: 'tb-mode' });

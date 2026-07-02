@@ -262,6 +262,9 @@ export function runCombat(
   function win() {
     endTelegraph();
     say(`${mob.name} повержен!`);
+    // счётчик побед (для заданий) — если автор создал переменную kills_total
+    const killsId = heroVarId(engine.project, 'kills_total');
+    if (killsId) engine.applyEffects([{ varId: killsId, op: 'add', value: 1 }]);
     // награды
     const expId = heroVarId(engine.project, 'exp');
     if (expId && mob.expReward) {

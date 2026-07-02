@@ -29,6 +29,16 @@ export function mountInspector(root: HTMLElement, store: Store) {
       renderNPCHelp();
     } else if (store.mode === 'items') {
       renderItemsHelp();
+    } else if (store.mode === 'quests') {
+      const title = h('div', { class: 'insp-title' });
+      title.append('Журнал игрока');
+      root.appendChild(title);
+      root.appendChild(section('Ежедневный ритм',
+        h('div', {
+          class: 'hint',
+          text: 'Суточные задания сбрасываются в полночь, недельные — в понедельник. «Расшифровка OldNet» идёт реальным временем даже при закрытой игре — главный крючок возвращения.\n\nРекомендация: держите 2–4 суточных задания от разных фракций, чтобы игрок ходил по разным NPC.',
+        }),
+      ));
     } else {
       renderVariablesHelp();
     }

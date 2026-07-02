@@ -13,6 +13,7 @@ import { mountVariables } from './variables';
 import { mountNPCs } from './npcs';
 import { mountItems } from './items';
 import { mountMobs } from './mobs';
+import { mountQuests } from './quests';
 import { registerHotkeys } from './hotkeys';
 
 const store = new Store(Store.loadAutosave() ?? seedProject());
@@ -33,6 +34,7 @@ const varsView = mountVariables(store);
 const npcView = mountNPCs(store);
 const itemsView = mountItems(store);
 const mobsView = mountMobs(store);
+const questsView = mountQuests(store);
 
 function renderCenter() {
   center.innerHTML = '';
@@ -48,6 +50,8 @@ function renderCenter() {
     center.appendChild(itemsView);
   } else if (store.mode === 'mobs') {
     center.appendChild(mobsView);
+  } else if (store.mode === 'quests') {
+    center.appendChild(questsView);
   } else {
     center.appendChild(varsView);
   }
