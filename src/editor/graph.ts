@@ -176,10 +176,20 @@ export class GraphView {
     const varName = (id: string) => store.getVariable(id)?.title ?? '?';
 
     switch (node.type) {
-      case 'line':
-        if (node.speaker) body.appendChild(h('div', { class: 'speaker', text: node.speaker }));
+      case 'line': {
+        const npc = node.speakerNpcId ? store.project.npcs?.find((x) => x.id === node.speakerNpcId) : undefined;
+        const speakerName = npc?.name ?? node.speaker;
+        if (speakerName) {
+          const sp = h('div', { class: 'speaker', text: (npc ? '👤 ' : '') + speakerName });
+          if (npc) {
+            const fac = store.project.factions?.find((f) => f.id === npc.factionId);
+            if (fac) sp.style.color = fac.color;
+          }
+          body.appendChild(sp);
+        }
         body.appendChild(h('div', { class: 'txt', text: node.text || '(пустая реплика)' }));
         break;
+      }
       case 'choice': {
         for (const c of node.choices ?? []) {
           const row = h('div', { class: 'gnode-choice' });

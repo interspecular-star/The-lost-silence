@@ -10,6 +10,7 @@ import { mountInspector } from './inspector';
 import { StageView } from './stage';
 import { GraphView } from './graph';
 import { mountVariables } from './variables';
+import { mountNPCs } from './npcs';
 import { registerHotkeys } from './hotkeys';
 
 const store = new Store(Store.loadAutosave() ?? seedProject());
@@ -27,6 +28,7 @@ mountInspector(right, store);
 const stageView = new StageView(store);
 const graphView = new GraphView(store);
 const varsView = mountVariables(store);
+const npcView = mountNPCs(store);
 
 function renderCenter() {
   center.innerHTML = '';
@@ -36,6 +38,8 @@ function renderCenter() {
   } else if (store.mode === 'dialogue') {
     center.appendChild(graphView.root);
     graphView.onShow();
+  } else if (store.mode === 'npc') {
+    center.appendChild(npcView);
   } else {
     center.appendChild(varsView);
   }

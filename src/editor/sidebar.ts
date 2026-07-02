@@ -16,8 +16,19 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     root.innerHTML = '';
     if (store.mode === 'scene') renderScenes();
     else if (store.mode === 'dialogue') renderDialogues();
+    else if (store.mode === 'npc') renderNPCInfo();
     else renderVariablesInfo();
   };
+
+  function renderNPCInfo() {
+    const s = h('div', { class: 'sb-section' });
+    s.appendChild(h('div', { class: 'sb-header' }, [h('span', { text: 'Персонажи' })]));
+    s.appendChild(h('div', {
+      class: 'hint', style: 'padding:6px 12px;',
+      text: 'Фракционная репутация = отношения встреченных NPC с учётом весов.\n\nПривяжите реплику к NPC в редакторе диалогов (поле «Персонаж») — знакомство отметится само.\n\nПока у игрока нет Осколка (переменная oskolok = 0), он не видит ни отношений, ни репутации.',
+    }));
+    root.appendChild(s);
+  }
 
   // ---------- сцены ----------
   function renderScenes() {

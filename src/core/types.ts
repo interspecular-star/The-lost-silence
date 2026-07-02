@@ -16,7 +16,10 @@ export interface VariableDef {
   title: string;           // отображаемое имя
   type: VarType;
   initial: VarValue;
-  category: 'general' | 'reputation';
+  // general/reputation — редактируются в таблице переменных;
+  // npc — авто-переменные персонажей (отношение, знакомство), живут в редакторе персонажей;
+  // computed — вычисляемые движком (репутация фракций), менять эффектами нельзя
+  category: 'general' | 'reputation' | 'npc' | 'computed';
   description?: string;
   tracked?: boolean;       // показывать в панели отслеживания при предпросмотре
 }
@@ -120,7 +123,8 @@ export interface DialogueNode {
   x: number;               // позиция в графе
   y: number;
   // line
-  speaker?: string;
+  speaker?: string;          // свободный текст (рассказчик, безымянные)
+  speakerNpcId?: string | null; // ссылка на NPC (приоритетнее speaker; отмечает знакомство)
   text?: string;
   next?: string | null;    // line / set / jump(после смены сцены диалог продолжается или нет)
   // choice
@@ -140,6 +144,29 @@ export interface Dialogue {
   name: string;
   startNodeId: string | null;
   nodes: DialogueNode[];
+}
+
+// ---------- Фракции и NPC ----------
+export interface Faction {
+  id: string;
+  name: string;
+  color: string;             // фирменный цвет (портреты, HUD)
+  // weighted — голос лидера весомее (иерархия, Cavernium);
+  // equal — все голоса равны (община, Woodhaven)
+  repMode: 'weighted' | 'equal';
+  description?: string;
+  repVarId: string;          // авто-переменная category:'computed' — репутация 0..100
+}
+
+export interface NPC {
+  id: string;
+  name: string;
+  factionId: string | null;  // null — вне фракций
+  weight: number;            // вес влияния 1..10 (учитывается при repMode:'weighted')
+  portrait?: string;         // data-URI; если нет — генерируется силуэт с инициалами
+  description?: string;
+  relationVarId: string;     // авто-переменная category:'npc' — отношение 0..100
+  metVarId: string;          // авто-переменная category:'npc' — знаком ли игрок (boolean)
 }
 
 // ---------- Idle-правила (пассивный прогресс) ----------
@@ -178,6 +205,10 @@ export interface Project {
   scenes: Scene[];
   dialogues: Dialogue[];
   idleRules?: IdleRule[];
+  factions?: Faction[];
+  npcs?: NPC[];
+  // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
+  oskolokVarName?: string;
   theme: Theme;
 }
 

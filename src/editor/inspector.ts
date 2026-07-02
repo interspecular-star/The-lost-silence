@@ -25,10 +25,30 @@ export function mountInspector(root: HTMLElement, store: Store) {
       const node = store.selectedNode;
       if (node) renderNode(node);
       else renderDialogue();
+    } else if (store.mode === 'npc') {
+      renderNPCHelp();
     } else {
       renderVariablesHelp();
     }
   };
+
+  function renderNPCHelp() {
+    const title = h('div', { class: 'insp-title' });
+    title.append('Персонажи и репутация');
+    root.appendChild(title);
+    root.appendChild(section('Уровни Осколка',
+      h('div', {
+        class: 'hint',
+        text: 'Переменная oskolok управляет тем, что видит игрок:\n\n0 — устройства нет, репутация скрыта\n1 — шкала отношения собеседника в диалоге\n2 — панель репутации фракций (кнопка ◈ в игре)\n3 — подсказки ▲▼ у вариантов ответа\n4 — следы OldNet (будущая фаза)\n\nВыдайте устройство эффектом «oskolok = 1» в нужном месте сюжета.',
+      }),
+    ));
+    root.appendChild(section('Формула репутации',
+      h('div', {
+        class: 'hint',
+        text: 'Считаются только встреченные NPC.\n\n«Иерархия»: голос с весом 10 значит в 10 раз больше веса 1.\n«Община»: веса игнорируются.\n\nДля сюжетных порогов используйте условия вида:\n{frep_...} ≥ 40  И  связи — через условия «Знаком: Имя» = да.',
+      }),
+    ));
+  }
 
   // Обёртка мутации: снимок → изменение → событие
   const mutate = (fn: () => void) => {
@@ -347,10 +367,21 @@ export function mountInspector(root: HTMLElement, store: Store) {
     root.appendChild(title);
 
     if (node.type === 'line') {
-      root.appendChild(section('Реплика',
-        row('Кто говорит', textInput(node.speaker ?? '', (v) => mutate(() => { node.speaker = v; }), { placeholder: 'Матис / Архон / (пусто — рассказчик)' })),
-        textArea(node.text ?? '', (v) => mutate(() => { node.text = v; }), 6),
-      ));
+      const npcOptions: [string, string][] = [
+        ['', '— не NPC (текст ниже) —'],
+        ...(store.project.npcs ?? []).map((n) => [n.id, n.name] as [string, string]),
+      ];
+      const sec = section('Реплика',
+        row('Персонаж', selectInput(node.speakerNpcId ?? '', npcOptions,
+          (v) => mutate(() => { node.speakerNpcId = v || null; }))),
+      );
+      if (!node.speakerNpcId) {
+        sec.appendChild(row('Имя текстом', textInput(node.speaker ?? '', (v) => mutate(() => { node.speaker = v; }), { placeholder: 'Рассказчик / голос из динамика…' })));
+      } else {
+        sec.appendChild(h('div', { class: 'hint', text: 'Реплика NPC: при первом разговоре игрок «знакомится» с ним, в диалоге виден портрет и (с Осколком ур.1+) шкала отношения.' }));
+      }
+      sec.appendChild(textArea(node.text ?? '', (v) => mutate(() => { node.text = v; }), 6));
+      root.appendChild(sec);
     }
 
     if (node.type === 'choice') {
@@ -428,8 +459,10 @@ export function mountInspector(root: HTMLElement, store: Store) {
   }
 
   // ================= РЕДАКТОРЫ УСЛОВИЙ / ЭФФЕКТОВ =================
-  function varOptions(): [string, string][] {
-    return store.project.variables.map((v) => [v.id, v.title]);
+  function varOptions(forEffects = false): [string, string][] {
+    return store.project.variables
+      .filter((v) => !(forEffects && v.category === 'computed')) // вычисляемые менять нельзя
+      .map((v) => [v.id, v.title]);
   }
 
   function valueEditor(varId: string, value: VarValue, onChange: (v: VarValue) => void): HTMLElement {
@@ -485,7 +518,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     list.forEach((e, i) => {
       const card = h('div', { class: 'cond-card' });
       const r = h('div', { class: 'row' });
-      r.appendChild(selectInput(e.varId, varOptions(), (v) => {
+      r.appendChild(selectInput(e.varId, varOptions(true), (v) => {
         const copy = [...list];
         const def = store.getVariable(v);
         copy[i] = { ...e, varId: v, value: def?.type === 'boolean' ? true : def?.type === 'number' ? 0 : '' };
@@ -511,7 +544,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     });
     const add = h('button', { class: 'btn small', text: '+ эффект' });
     add.onclick = () => {
-      const first = store.project.variables[0];
+      const first = store.project.variables.find((v) => v.category !== 'computed');
       if (!first) { toast('Сначала создайте переменную (режим «Переменные»)', true); return; }
       commit([...list, { varId: first.id, op: first.type === 'number' ? 'add' : 'set', value: first.type === 'boolean' ? true : first.type === 'number' ? 1 : '' }]);
     };

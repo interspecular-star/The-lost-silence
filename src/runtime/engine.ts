@@ -8,6 +8,7 @@ import {
   Project, Scene, SceneElement, Dialogue, DialogueNode,
   Condition, Effect, VarValue, CANVAS_W, CANVAS_H,
 } from '../core/types';
+import { materializeFactionReps, computeFactionRep, npcPortrait } from '../core/npc';
 
 export interface EngineOptions {
   onVarsChanged?: (state: Record<string, VarValue>) => void;
@@ -29,7 +30,9 @@ export class Engine {
   opts: EngineOptions;
 
   private sceneLayer: HTMLElement;
+  private hudLayer!: HTMLElement;
   private dialogueLayer: HTMLElement;
+  private factionPanelOpen = false;
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
   private tickTimer: number | undefined;
@@ -48,12 +51,25 @@ export class Engine {
 
     this.sceneLayer = document.createElement('div');
     this.sceneLayer.style.cssText = 'position:absolute;inset:0;';
+    this.hudLayer = document.createElement('div');
+    this.hudLayer.style.cssText = `position:absolute;inset:0;pointer-events:none;
+      font-size:calc(26 * 100cqw / ${CANVAS_W});`;
     this.dialogueLayer = document.createElement('div');
     this.dialogueLayer.style.cssText = 'position:absolute;inset:0;pointer-events:none;';
     root.appendChild(this.sceneLayer);
+    root.appendChild(this.hudLayer);
     root.appendChild(this.dialogueLayer);
 
     for (const v of project.variables) this.state[v.id] = v.initial;
+    materializeFactionReps(project, this.state);
+  }
+
+  /** Уровень Осколка (0 — устройства нет) */
+  get oskolokLevel(): number {
+    const name = this.project.oskolokVarName;
+    if (!name) return 99; // переменная не настроена — ничего не скрываем
+    const def = this.project.variables.find((v) => v.name === name);
+    return def ? Number(this.state[def.id] ?? 0) : 99;
   }
 
   start() {
@@ -179,7 +195,12 @@ export class Engine {
 
   applyEffects(effects: Effect[] | undefined) {
     if (!effects || effects.length === 0) return;
+    const isComputed = (id: string) =>
+      this.project.variables.find((v) => v.id === id)?.category === 'computed';
+    const isRelation = (id: string) =>
+      this.project.npcs?.some((n) => n.relationVarId === id) ?? false;
     for (const e of effects) {
+      if (isComputed(e.varId)) continue; // вычисляемые менять нельзя
       const cur = this.state[e.varId];
       switch (e.op) {
         case 'set': this.state[e.varId] = e.value; break;
@@ -187,7 +208,12 @@ export class Engine {
         case 'sub': this.state[e.varId] = Number(cur ?? 0) - Number(e.value); break;
         case 'toggle': this.state[e.varId] = !cur; break;
       }
+      // отношения NPC зажаты в 0..100
+      if (isRelation(e.varId)) {
+        this.state[e.varId] = Math.max(0, Math.min(100, Number(this.state[e.varId]) || 0));
+      }
     }
+    materializeFactionReps(this.project, this.state);
     this.opts.onVarsChanged?.(this.state);
     this.renderScene(); // условная видимость элементов могла измениться
     this.scheduleSave();
@@ -221,6 +247,63 @@ export class Engine {
       if (!this.checkConditions(el.visibleIf)) continue;
       this.sceneLayer.appendChild(this.renderElement(el));
     }
+    this.renderHUD();
+  }
+
+  // ---------- HUD Осколка ----------
+  private renderHUD() {
+    this.hudLayer.innerHTML = '';
+    const factions = this.project.factions ?? [];
+    // панель фракций доступна с ур.2 Осколка
+    if (this.oskolokLevel < 2 || factions.length === 0) return;
+
+    const btn = document.createElement('div');
+    btn.textContent = '◈';
+    btn.title = 'Осколок: репутация фракций';
+    btn.style.cssText = `position:absolute;top:2.5%;left:2%;width:1.7em;height:1.7em;
+      display:flex;align-items:center;justify-content:center;border-radius:0.4em;
+      background:rgba(10,16,22,0.85);border:1px solid ${this.project.theme.accent}55;
+      color:${this.project.theme.accent};cursor:pointer;pointer-events:auto;user-select:none;`;
+    btn.onclick = () => { this.factionPanelOpen = !this.factionPanelOpen; this.renderHUD(); };
+    this.hudLayer.appendChild(btn);
+
+    if (!this.factionPanelOpen) return;
+    const panel = document.createElement('div');
+    panel.style.cssText = `position:absolute;top:2.5%;left:calc(2% + 2.1em);min-width:11em;
+      background:rgba(8,13,18,0.94);border:1px solid rgba(255,255,255,0.1);
+      border-radius:0.5em;padding:0.7em 0.9em;pointer-events:auto;
+      font-size:0.72em;color:#cfd9e2;backdrop-filter:blur(4px);`;
+    const title = document.createElement('div');
+    title.textContent = 'РЕПУТАЦИЯ ФРАКЦИЙ';
+    title.style.cssText = `letter-spacing:2px;font-size:0.72em;opacity:0.55;margin-bottom:0.7em;`;
+    panel.appendChild(title);
+    for (const f of factions) {
+      const info = computeFactionRep(this.project, f, (id) => this.state[id]);
+      const row = document.createElement('div');
+      row.style.cssText = 'margin-bottom:0.6em;';
+      const top = document.createElement('div');
+      top.style.cssText = 'display:flex;justify-content:space-between;gap:1.5em;';
+      const nm = document.createElement('span');
+      nm.textContent = f.name;
+      nm.style.color = f.color;
+      const val = document.createElement('span');
+      val.textContent = info.met > 0 ? `${info.rep}%` : '—';
+      top.append(nm, val);
+      row.appendChild(top);
+      const meta = document.createElement('div');
+      meta.textContent = `связей: ${info.met} из ${info.total}`;
+      meta.style.cssText = 'opacity:0.45;font-size:0.85em;';
+      row.appendChild(meta);
+      const bar = document.createElement('div');
+      bar.style.cssText = `margin-top:0.25em;height:0.25em;border-radius:1em;
+        background:rgba(255,255,255,0.1);overflow:hidden;`;
+      const fill = document.createElement('div');
+      fill.style.cssText = `height:100%;width:${info.rep}%;background:${f.color};border-radius:1em;`;
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      panel.appendChild(row);
+    }
+    this.hudLayer.appendChild(panel);
   }
 
   renderElement(el: SceneElement): HTMLElement {
@@ -371,7 +454,44 @@ export class Engine {
   private renderLine(n: DialogueNode) {
     const t = this.project.theme;
     const box = this.makeBox();
-    if (n.speaker) {
+
+    const npc = n.speakerNpcId ? this.project.npcs?.find((x) => x.id === n.speakerNpcId) : undefined;
+    if (npc) {
+      // первое знакомство
+      if (this.state[npc.metVarId] !== true) {
+        this.state[npc.metVarId] = true;
+        materializeFactionReps(this.project, this.state);
+        this.opts.onVarsChanged?.(this.state);
+        this.scheduleSave();
+      }
+      const head = document.createElement('div');
+      head.style.cssText = 'display:flex;align-items:center;gap:0.7em;margin-bottom:0.55em;';
+      const img = document.createElement('img');
+      img.src = npcPortrait(this.project, npc);
+      img.style.cssText = `width:2.4em;height:2.4em;border-radius:0.35em;flex:0 0 auto;`;
+      head.appendChild(img);
+      const nameWrap = document.createElement('div');
+      const sp = document.createElement('div');
+      sp.style.cssText = `color:${t.speakerColor};font-size:0.75em;letter-spacing:2px;
+        text-transform:uppercase;font-weight:600;`;
+      sp.textContent = npc.name;
+      nameWrap.appendChild(sp);
+      // Осколок ур.1+: видно отношение собеседника
+      if (this.oskolokLevel >= 1) {
+        const rel = Number(this.state[npc.relationVarId] ?? 0);
+        const bar = document.createElement('div');
+        bar.style.cssText = `margin-top:0.25em;width:9em;height:0.28em;border-radius:1em;
+          background:rgba(255,255,255,0.12);overflow:hidden;`;
+        const fill = document.createElement('div');
+        fill.style.cssText = `height:100%;width:${rel}%;border-radius:1em;
+          background:${relColor(rel)};transition:width .3s;`;
+        bar.appendChild(fill);
+        bar.title = `Отношение: ${rel}/100`;
+        nameWrap.appendChild(bar);
+      }
+      head.appendChild(nameWrap);
+      box.appendChild(head);
+    } else if (n.speaker) {
       const sp = document.createElement('div');
       sp.style.cssText = `color:${t.speakerColor};font-size:0.75em;letter-spacing:2px;
         text-transform:uppercase;margin-bottom:0.5em;font-weight:600;`;
@@ -400,12 +520,28 @@ export class Engine {
     box.appendChild(list);
 
     const available = (n.choices ?? []).filter((c) => this.checkConditions(c.conditions));
+    const relIds = new Set((this.project.npcs ?? []).map((x) => x.relationVarId));
     for (const c of available) {
       const btn = document.createElement('div');
       btn.style.cssText = `background:${t.choiceBg};color:${t.choiceText};
         padding:0.6em 1em;border-radius:6px;cursor:pointer;
         border:1px solid rgba(255,255,255,0.06);transition:background .15s;`;
       btn.textContent = this.interpolate(c.text);
+      // Осколок ур.3+: подсказки — как вариант повлияет на отношения
+      if (this.oskolokLevel >= 3) {
+        let delta = 0;
+        for (const e of c.effects) {
+          if (!relIds.has(e.varId)) continue;
+          if (e.op === 'add') delta += Number(e.value);
+          if (e.op === 'sub') delta -= Number(e.value);
+        }
+        if (delta !== 0) {
+          const mark = document.createElement('span');
+          mark.textContent = delta > 0 ? ' ▲' : ' ▼';
+          mark.style.color = delta > 0 ? '#98c379' : '#e06c75';
+          btn.appendChild(mark);
+        }
+      }
       btn.onmouseenter = () => { btn.style.background = t.choiceHover; };
       btn.onmouseleave = () => { btn.style.background = t.choiceBg; };
       btn.onclick = () => {
@@ -419,6 +555,13 @@ export class Engine {
       this.endDialogue();
     }
   }
+}
+
+/** Цвет индикатора отношения: красный → жёлтый → зелёный */
+function relColor(rel: number): string {
+  if (rel < 34) return '#e06c75';
+  if (rel < 67) return '#e5c07b';
+  return '#98c379';
 }
 
 /**
