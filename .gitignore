@@ -1,0 +1,13 @@
+# зависимости и сборка
+node_modules/
+dist/
+
+# собирается автоматически (npm run runtime)
+public/runtime.js
+
+# локальные настройки Claude Code
+.claude/settings.local.json
+
+# системное
+Thumbs.db
+Desktop.ini
