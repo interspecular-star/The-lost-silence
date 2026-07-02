@@ -14,3 +14,13 @@ Desktop.ini
 
 # временные файлы Word
 ~$*
+
+# Python (venv для flask/graphify)
+venv/
+__pycache__/
+*.pyc
+.env
+
+# graphify (генерируемый граф знаний)
+graphify-out/
+.graphify*

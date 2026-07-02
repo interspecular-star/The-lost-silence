@@ -7,7 +7,8 @@
     "runtime": "node scripts/build-runtime.mjs",
     "dev": "npm run runtime && vite",
     "build": "npm run runtime && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "graph": "venv\\Scripts\\graphify update ."
   },
   "devDependencies": {
     "esbuild": "^0.24.0",
