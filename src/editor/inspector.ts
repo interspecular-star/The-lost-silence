@@ -527,8 +527,8 @@ export function mountInspector(root: HTMLElement, store: Store) {
         copy[i].qty = Math.max(1, Math.round(v));
         commit(copy);
       });
-      qty.style.width = '60px';
-      qty.style.flex = '0 0 60px';
+      qty.style.width = '84px';
+      qty.style.flex = '0 0 84px';
       r.appendChild(qty);
       const del = h('button', { class: 'del', text: '✕' });
       del.onclick = () => commit(list.filter((_, j) => j !== i));

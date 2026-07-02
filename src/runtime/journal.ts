@@ -112,6 +112,13 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
         d.style.cssText = 'font-size:0.8em;opacity:0.6;margin-top:0.2em;';
         info.appendChild(d);
       }
+      const reward = rewardLabel(q.rewardEffects, q.rewardItems);
+      if (reward) {
+        const r = document.createElement('div');
+        r.textContent = `Награда: ${reward}`;
+        r.style.cssText = 'font-size:0.78em;color:#e5c07b;margin-top:0.35em;';
+        info.appendChild(r);
+      }
       c.appendChild(info);
 
       const key = resetKey(q.kind);
@@ -258,6 +265,11 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
         d.textContent = `Расшифровка: ~${def.durationMin} мин реального времени (идёт и когда игра закрыта)`;
         d.style.cssText = 'font-size:0.75em;opacity:0.6;';
         info.appendChild(d);
+        const rw = rewardLabel(def.rewardEffects, def.rewardItems);
+        const r = document.createElement('div');
+        r.textContent = `Награда: ${rw ? rw + ' · ' : ''}засекреченные данные`;
+        r.style.cssText = 'font-size:0.75em;color:#e5c07b;margin-top:0.2em;';
+        info.appendChild(r);
         c.appendChild(info);
         const b = btn('Начать расшифровку', true);
         b.onclick = () => {
@@ -299,6 +311,27 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
     box.append(h1, t, ok);
     o.appendChild(box);
     layer.appendChild(o);
+  }
+
+  /** Человекочитаемая строка награды: «+25 Кредиты · Стим-инъектор ×2» */
+  function rewardLabel(
+    effects?: { varId: string; op: string; value: unknown }[],
+    items?: { itemId: string; qty: number }[],
+  ): string {
+    const parts: string[] = [];
+    for (const e of effects ?? []) {
+      const v = p.variables.find((x) => x.id === e.varId);
+      if (!v) continue;
+      if (e.op === 'add') parts.push(`+${e.value} ${v.title}`);
+      else if (e.op === 'sub') parts.push(`−${e.value} ${v.title}`);
+      else if (e.op === 'set') parts.push(`${v.title}: ${typeof e.value === 'boolean' ? (e.value ? 'да' : 'нет') : e.value}`);
+      else parts.push(v.title);
+    }
+    for (const g of items ?? []) {
+      const it = p.items?.find((x) => x.id === g.itemId);
+      if (it) parts.push(`${it.name}${g.qty > 1 ? ` ×${g.qty}` : ''}`);
+    }
+    return parts.join(' · ');
   }
 
   function hint(text: string): HTMLElement {

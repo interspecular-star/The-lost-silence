@@ -93,7 +93,7 @@ export function mountMobs(store: Store): HTMLElement {
     row1.appendChild(del);
     f.appendChild(row1);
 
-    const mkNum = (label: string, val: number, fn: (v: number) => void, w = '64px') => {
+    const mkNum = (label: string, val: number, fn: (v: number) => void, w = '84px') => {
       const wr = h('div', { style: 'display:flex;align-items:center;gap:4px;' });
       wr.appendChild(h('span', { style: 'color:var(--text-faint);font-size:11px;', text: label }));
       const inp = numberInput(val, fn);
@@ -105,7 +105,7 @@ export function mountMobs(store: Store): HTMLElement {
     row2.appendChild(mkNum('HP:', mob.hp, (v) => mutate(() => { mob.hp = Math.max(1, Math.round(v)); })));
     row2.appendChild(mkNum('урон:', mob.atk, (v) => mutate(() => { mob.atk = Math.max(0, v); })));
     row2.appendChild(mkNum('защита:', mob.def, (v) => mutate(() => { mob.def = Math.max(0, v); })));
-    row2.appendChild(mkNum('замах, мс:', mob.telegraphMs, (v) => mutate(() => { mob.telegraphMs = Math.max(400, Math.round(v)); }), '78px'));
+    row2.appendChild(mkNum('замах, мс:', mob.telegraphMs, (v) => mutate(() => { mob.telegraphMs = Math.max(400, Math.round(v)); }), '96px'));
     row2.appendChild(mkNum('крит %:', mob.critChance ?? 0, (v) => mutate(() => { mob.critChance = v || undefined; })));
     f.appendChild(row2);
 
@@ -123,10 +123,10 @@ export function mountMobs(store: Store): HTMLElement {
       r.appendChild(selectInput(d.itemId, items.map((it) => [it.id, it.name] as [string, string]),
         (v) => mutate(() => { d.itemId = v; })));
       const qty = numberInput(d.qty, (v) => mutate(() => { d.qty = Math.max(1, Math.round(v)); }));
-      qty.style.width = '54px'; qty.title = 'Количество';
+      qty.style.width = '84px'; qty.style.flex = '0 0 84px'; qty.title = 'Количество';
       r.appendChild(qty);
       const ch = numberInput(d.chance, (v) => mutate(() => { d.chance = Math.max(0, Math.min(100, v)); }));
-      ch.style.width = '58px'; ch.title = 'Шанс %';
+      ch.style.width = '84px'; ch.style.flex = '0 0 84px'; ch.title = 'Шанс %';
       r.appendChild(ch);
       const del2 = h('button', { class: 'btn small danger-ghost', text: '✕' });
       del2.onclick = () => mutate(() => { mob.drops.splice(i, 1); });

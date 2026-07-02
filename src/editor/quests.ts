@@ -51,7 +51,8 @@ export function mountQuests(store: Store): HTMLElement {
           copy[i].value = v;
           commit(copy);
         });
-        val.style.width = '70px';
+        val.style.width = '84px';
+        val.style.flex = '0 0 84px';
         r.appendChild(val);
       }
       const del = h('button', { class: 'btn small danger-ghost', text: '✕' });
@@ -98,7 +99,8 @@ export function mountQuests(store: Store): HTMLElement {
             copy[i].value = v;
             commit(copy);
           });
-          val.style.width = '70px';
+          val.style.width = '84px';
+        val.style.flex = '0 0 84px';
           r.appendChild(val);
         }
       }
@@ -132,7 +134,8 @@ export function mountQuests(store: Store): HTMLElement {
         copy[i].qty = Math.max(1, Math.round(v));
         commit(copy);
       });
-      q.style.width = '56px';
+      q.style.width = '84px';
+      q.style.flex = '0 0 84px';
       r.appendChild(q);
       const del = h('button', { class: 'btn small danger-ghost', text: '✕' });
       del.onclick = () => commit(list.filter((_, j) => j !== i));
@@ -267,7 +270,7 @@ export function mountQuests(store: Store): HTMLElement {
         const w = h('div', { style: 'display:flex;align-items:center;gap:4px;' });
         w.appendChild(h('span', { style: 'color:var(--text-faint);font-size:11px;', text: label }));
         const inp = numberInput(val, fn);
-        inp.style.width = '64px';
+        inp.style.width = '84px';
         w.appendChild(inp);
         return w;
       };
@@ -332,7 +335,7 @@ export function mountQuests(store: Store): HTMLElement {
         (v) => mutate(() => { dec.itemId = v; })));
       r2.appendChild(h('span', { style: 'color:var(--text-faint);font-size:11px;', text: 'минут:' }));
       const dur = numberInput(dec.durationMin, (v) => mutate(() => { dec.durationMin = Math.max(0.1, v); }));
-      dur.style.width = '70px';
+      dur.style.width = '84px';
       r2.appendChild(dur);
       c.appendChild(r2);
 

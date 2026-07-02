@@ -61,7 +61,7 @@ export function mountItems(store: Store): HTMLElement {
     const small = (label: string, input: HTMLElement) => {
       const w = h('div', { style: 'display:flex;align-items:center;gap:6px;' });
       w.appendChild(h('span', { style: 'color:var(--text-dim);font-size:12px;', text: label }));
-      input.style.width = '70px';
+      input.style.width = '84px';
       w.appendChild(input);
       return w;
     };
@@ -80,8 +80,8 @@ export function mountItems(store: Store): HTMLElement {
       rowEl.appendChild(selectInput(g.itemId, items.map((it) => [it.id, it.name] as [string, string]),
         (v) => mutate(() => { g.itemId = v; })));
       const qty = numberInput(g.qty, (v) => mutate(() => { g.qty = Math.max(1, Math.round(v)); }));
-      qty.style.width = '64px';
-      qty.style.flex = '0 0 64px';
+      qty.style.width = '84px';
+      qty.style.flex = '0 0 84px';
       rowEl.appendChild(qty);
       const del = h('button', { class: 'btn small danger-ghost', text: '✕' });
       del.onclick = () => mutate(() => { hero.startItems.splice(i, 1); });
@@ -197,7 +197,7 @@ export function mountItems(store: Store): HTMLElement {
       const w = h('div', { style: 'display:flex;align-items:center;gap:4px;' });
       w.appendChild(h('span', { style: 'color:var(--text-faint);font-size:11px;', text: label }));
       const inp = numberInput(val, fn);
-      inp.style.width = '64px';
+      inp.style.width = '84px';
       w.appendChild(inp);
       return w;
     };
@@ -249,7 +249,8 @@ export function mountItems(store: Store): HTMLElement {
       r.appendChild(selectInput(e.varId, vars.map((v) => [v.id, v.title] as [string, string]), (v) => mutate(() => { e.varId = v; })));
       r.appendChild(selectInput(e.op, [['add', '+'], ['sub', '−'], ['set', '=']], (v) => mutate(() => { e.op = v as typeof e.op; })));
       const val = numberInput(Number(e.value) || 0, (v) => mutate(() => { e.value = v; }));
-      val.style.width = '70px';
+      val.style.width = '84px';
+      val.style.flex = '0 0 84px';
       r.appendChild(val);
       const del = h('button', { class: 'btn small danger-ghost', text: '✕' });
       del.onclick = () => mutate(() => { item.useEffects!.splice(i, 1); });

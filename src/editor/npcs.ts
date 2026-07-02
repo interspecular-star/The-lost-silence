@@ -169,8 +169,8 @@ export function mountNPCs(store: Store): HTMLElement {
     })));
     row2.appendChild(h('span', { style: 'color:var(--text-faint);font-size:11px;flex:0 0 auto;', text: 'вес:' }));
     const weightIn = numberInput(npc.weight, (v) => mutate(() => { npc.weight = Math.max(1, Math.min(10, Math.round(v))); }), { min: '1', max: '10' });
-    weightIn.style.width = '58px';
-    weightIn.style.flex = '0 0 58px';
+    weightIn.style.width = '72px';
+    weightIn.style.flex = '0 0 72px';
     row2.appendChild(weightIn);
     fields.appendChild(row2);
 
@@ -180,8 +180,8 @@ export function mountNPCs(store: Store): HTMLElement {
     const initIn = numberInput(Number(relVar?.initial ?? 0), (v) => mutate(() => {
       if (relVar) relVar.initial = Math.max(0, Math.min(100, v));
     }), { min: '0', max: '100' });
-    initIn.style.width = '64px';
-    initIn.style.flex = '0 0 64px';
+    initIn.style.width = '84px';
+    initIn.style.flex = '0 0 84px';
     row3.appendChild(initIn);
     if (relVar) {
       row3.appendChild(h('span', { class: 'var-name', style: 'font-size:11px;overflow:hidden;text-overflow:ellipsis;', text: `{${relVar.name}}`, title: 'Имя переменной — для условий, эффектов и подстановки в текст' }));
