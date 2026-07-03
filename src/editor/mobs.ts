@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Store } from '../core/store';
-import { MobDef, uid, deepClone } from '../core/types';
+import { MobDef, MobAttack, uid, deepClone } from '../core/types';
 import { mobIcon } from '../core/hero';
 import {
   h, textInput, numberInput, selectInput, textArea,
@@ -34,7 +34,7 @@ export function mountMobs(store: Store): HTMLElement {
     root.appendChild(head);
     root.appendChild(h('div', {
       class: 'hint', style: 'margin-bottom:12px;',
-      text: 'Бой запускается действием элемента «Начать бой». Замах (мс) — сколько длится полоса перед ударом: меньше — сложнее. Ловкость героя расширяет окно реакции (350 + ловкость × 15 мс), парирование — 45% от окна уклона.',
+      text: 'Бой запускается действием элемента «Начать бой». Замах (мс) — сколько длится полоса перед ударом: меньше — сложнее. Ловкость героя расширяет окно реакции (350 + ловкость × 15 мс), парирование — 45% от окна уклона. В бою игроку также доступны: Скан Осколком (открывает цифры и атаки моба), Защита (полурона + фокус) и Предмет (расходники).',
     }));
 
     const mobs = store.project.mobs ?? [];
@@ -113,6 +113,37 @@ export function mountMobs(store: Store): HTMLElement {
     row3.appendChild(mkNum('опыт:', mob.expReward, (v) => mutate(() => { mob.expReward = Math.max(0, Math.round(v)); })));
     row3.appendChild(mkNum('кредиты:', mob.creditsReward ?? 0, (v) => mutate(() => { mob.creditsReward = v > 0 ? Math.round(v) : undefined; })));
     f.appendChild(row3);
+
+    // типы атак
+    f.appendChild(h('div', {
+      style: 'font-size:10px;color:var(--text-faint);margin-top:2px;',
+      text: 'Атаки (пусто — одна стандартная). ×урон — множитель урона, вес — как часто выпадает:',
+    }));
+    const atkList = h('div', { style: 'display:flex;flex-direction:column;gap:4px;' });
+    (mob.attacks ?? []).forEach((a: MobAttack, i: number) => {
+      const r = h('div', { style: 'display:flex;gap:4px;align-items:center;' });
+      const nm = textInput(a.name, (v) => mutate(() => { a.name = v || 'Атака'; }));
+      nm.placeholder = 'Название';
+      r.appendChild(nm);
+      const mkSmall = (val: number, fn: (v: number) => void, title: string) => {
+        const inp = numberInput(val, fn);
+        inp.style.width = '76px'; inp.style.flex = '0 0 76px'; inp.title = title;
+        return inp;
+      };
+      r.appendChild(mkSmall(a.atkMult, (v) => mutate(() => { a.atkMult = Math.max(0.1, v); }), '×урон (0.7 — быстрая, 1.6 — тяжёлая)'));
+      r.appendChild(mkSmall(a.telegraphMs, (v) => mutate(() => { a.telegraphMs = Math.max(400, Math.round(v)); }), 'Замах, мс'));
+      r.appendChild(mkSmall(a.weight, (v) => mutate(() => { a.weight = Math.max(0, Math.round(v)); }), 'Вес выбора (0 — отключена)'));
+      const del3 = h('button', { class: 'btn small danger-ghost', text: '✕' });
+      del3.onclick = () => mutate(() => { mob.attacks!.splice(i, 1); });
+      r.appendChild(del3);
+      atkList.appendChild(r);
+    });
+    const addAtk = h('button', { class: 'btn small', text: '+ атака', style: 'align-self:flex-start;' });
+    addAtk.onclick = () => mutate(() => {
+      (mob.attacks ??= []).push({ id: uid('atk'), name: 'Удар', atkMult: 1, telegraphMs: mob.telegraphMs, weight: 1 });
+    });
+    atkList.appendChild(addAtk);
+    f.appendChild(atkList);
 
     // дроп
     f.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:2px;', text: 'Дроп (шанс в %):' }));

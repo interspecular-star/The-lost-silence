@@ -233,6 +233,12 @@ export function validateProject(p: Project): Issue[] {
       if (!itemById.has(drop.itemId)) err(`Моб «${m.name}»`, 'дроп ссылается на удалённый предмет', go);
     }
     if (m.hp <= 0) warn(`Моб «${m.name}»`, 'HP ≤ 0 — бой закончится мгновенно', go);
+    if (m.attacks?.length && m.attacks.every((a) => a.weight <= 0)) {
+      err(`Моб «${m.name}»`, 'все атаки с весом 0 — моб будет бить стандартной атакой', go);
+    }
+    for (const a of m.attacks ?? []) {
+      if (a.telegraphMs < 400) warn(`Моб «${m.name}» → «${a.name}»`, 'замах меньше 400 мс — почти неуворачиваемо', go);
+    }
   }
 
   // --- журнал: задания, улучшения, расшифровки ---

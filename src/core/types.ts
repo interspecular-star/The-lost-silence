@@ -234,6 +234,16 @@ export const STAT_LABELS: Record<StatKey, string> = {
 // ---------- Мобы и бой ----------
 export interface MobDrop { itemId: string; qty: number; chance: number; } // chance 0..100
 
+// Тип атаки моба: разные замахи учат «читать» противника.
+// Если у моба нет атак — используется одна стандартная (urон atk, замах telegraphMs).
+export interface MobAttack {
+  id: string;
+  name: string;            // «Разряд», «Таран»
+  atkMult: number;         // множитель урона от atk моба (0.7 — быстрая, 1.6 — тяжёлая)
+  telegraphMs: number;     // длительность замаха этой атаки
+  weight: number;          // вес при случайном выборе (0 — атака отключена)
+}
+
 export interface MobDef {
   id: string;
   name: string;
@@ -244,6 +254,7 @@ export interface MobDef {
   telegraphMs: number;       // длительность замаха (окно реакции игрока)
   def: number;               // защита моба
   critChance?: number;       // % шанс крита моба
+  attacks?: MobAttack[];     // типы атак (пусто — одна стандартная)
   expReward: number;
   creditsReward?: number;
   drops: MobDrop[];

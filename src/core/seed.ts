@@ -145,6 +145,10 @@ export function seedProject(): Project {
     {
       id: mobDrone, name: 'Сорванный дрон-охранник',
       hp: 45, atk: 9, def: 2, telegraphMs: 1500, critChance: 5,
+      attacks: [
+        { id: uid('atk'), name: 'Разряд', atkMult: 0.7, telegraphMs: 1000, weight: 3 },
+        { id: uid('atk'), name: 'Таран', atkMult: 1.5, telegraphMs: 1800, weight: 1 },
+      ],
       expReward: 70, creditsReward: 15,
       drops: [
         { itemId: iPart.id, qty: 2, chance: 80 },

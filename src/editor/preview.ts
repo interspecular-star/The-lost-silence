@@ -98,6 +98,8 @@ export function openPreview(store: Store) {
     });
     fitStage(stage, stageArea);
     engine.start();
+    // доступ из консоли — для отладки и автотестов
+    (window as unknown as { __engine: Engine | null }).__engine = engine;
   };
 
   sceneSel.onchange = boot;
