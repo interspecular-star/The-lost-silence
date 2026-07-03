@@ -354,12 +354,12 @@ export function defaultTheme(): Theme {
   return {
     font: "'Segoe UI', system-ui, sans-serif",
     accent: '#4fd1c5',
-    dialogueBox: 'rgba(8, 14, 20, 0.92)',
+    dialogueBox: 'rgba(5, 9, 13, 0.94)',
     dialogueText: '#e6edf3',
     speakerColor: '#4fd1c5',
-    choiceBg: 'rgba(79, 209, 197, 0.08)',
+    choiceBg: 'transparent',
     choiceText: '#cfe8e5',
-    choiceHover: 'rgba(79, 209, 197, 0.22)',
+    choiceHover: 'rgba(79, 209, 197, 0.07)',
   };
 }
 

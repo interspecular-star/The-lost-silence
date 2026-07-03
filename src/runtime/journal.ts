@@ -37,51 +37,66 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
   backdrop.onclick = (e) => { if (e.target === backdrop) close(); };
   layer.appendChild(backdrop);
 
+  const accent = p.theme.accent;
   const panel = document.createElement('div');
   panel.style.cssText = `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-    width:70%;height:78%;background:#0c1218;border:1px solid rgba(255,255,255,0.12);
-    border-radius:0.6em;padding:1em 1.2em;display:flex;flex-direction:column;gap:0.7em;font-size:0.78em;`;
+    width:74%;height:82%;background:rgba(6,10,14,0.97);border:1px solid rgba(255,255,255,0.08);
+    border-top:1px solid ${accent}33;padding:1.3em 1.8em;display:flex;flex-direction:column;
+    gap:0.9em;font-size:0.78em;`;
   backdrop.appendChild(panel);
 
+  const titleRow = document.createElement('div');
+  titleRow.style.cssText = 'display:flex;align-items:baseline;gap:1em;';
+  const bigTitle = document.createElement('div');
+  bigTitle.textContent = 'ЖУРНАЛ';
+  bigTitle.style.cssText = 'font-size:1.5em;font-weight:200;letter-spacing:8px;color:#e6edf3;flex:1;';
+  titleRow.appendChild(bigTitle);
+  const closeBtn = document.createElement('div');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'cursor:pointer;opacity:0.5;padding:0 0.3em;';
+  closeBtn.onclick = close;
+  titleRow.appendChild(closeBtn);
+  panel.appendChild(titleRow);
+
   const head = document.createElement('div');
-  head.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
+  head.style.cssText = `display:flex;align-items:flex-end;gap:1.8em;
+    border-bottom:1px solid rgba(255,255,255,0.07);`;
   const tabs: ['quests' | 'upgrades' | 'oldnet', string][] = [
-    ['quests', '📋 Задания'], ['upgrades', '⚙ Улучшения'], ['oldnet', '⌬ OldNet'],
+    ['quests', 'КВЕСТЫ'], ['upgrades', 'УЛУЧШЕНИЯ'], ['oldnet', 'АРХИВ OLDNET'],
   ];
   const tabEls = new Map<string, HTMLElement>();
   for (const [key, label] of tabs) {
     const t = document.createElement('div');
     t.textContent = label;
-    t.style.cssText = `padding:0.35em 0.9em;border-radius:0.4em;cursor:pointer;font-size:0.9em;
-      border:1px solid transparent;`;
+    t.style.cssText = `padding:0.4em 0.1em;cursor:pointer;font-size:0.85em;letter-spacing:3px;
+      border-bottom:2px solid transparent;margin-bottom:-1px;transition:color .15s;`;
     t.onclick = () => { tab = key; render(); };
     tabEls.set(key, t);
     head.appendChild(t);
   }
-  head.appendChild(Object.assign(document.createElement('div'), { style: 'flex:1' }));
-  const closeBtn = document.createElement('div');
-  closeBtn.textContent = '✕';
-  closeBtn.style.cssText = 'cursor:pointer;opacity:0.6;padding:0 0.3em;';
-  closeBtn.onclick = close;
-  head.appendChild(closeBtn);
   panel.appendChild(head);
 
   const body = document.createElement('div');
   body.style.cssText = 'flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0.6em;';
   panel.appendChild(body);
 
-  const card = () => {
+  const card = (frameColor?: string) => {
     const c = document.createElement('div');
-    c.style.cssText = `background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.09);
-      border-radius:0.5em;padding:0.7em 0.9em;display:flex;align-items:center;gap:0.9em;`;
+    c.style.cssText = `background:rgba(255,255,255,0.015);
+      border:1px solid ${frameColor ? frameColor + '55' : 'rgba(255,255,255,0.08)'};
+      padding:0.85em 1.1em;display:flex;align-items:center;gap:1.1em;`;
     return c;
   };
-  const btn = (label: string, accent = false) => {
+  const btn = (label: string, isAccent = false) => {
     const b = document.createElement('div');
-    b.textContent = label;
-    b.style.cssText = `padding:0.4em 0.9em;border-radius:0.4em;cursor:pointer;white-space:nowrap;
-      font-size:0.85em;border:1px solid ${accent ? '#2a6f68' : 'rgba(255,255,255,0.16)'};
-      color:${accent ? '#4fd1c5' : '#cfd9e2'};background:${accent ? 'rgba(79,209,197,0.08)' : 'rgba(255,255,255,0.04)'};`;
+    b.textContent = label.toUpperCase();
+    b.style.cssText = `padding:0.5em 1em;cursor:pointer;white-space:nowrap;
+      font-size:0.72em;letter-spacing:2px;border:1px solid ${isAccent ? '#2a6f68' : 'rgba(255,255,255,0.14)'};
+      color:${isAccent ? '#4fd1c5' : '#8fa2af'};background:transparent;transition:background .15s;`;
+    if (isAccent) {
+      b.onmouseenter = () => { b.style.background = 'rgba(79,209,197,0.08)'; };
+      b.onmouseleave = () => { b.style.background = 'transparent'; };
+    }
     return b;
   };
   const dim = (el: HTMLElement) => { el.style.opacity = '0.4'; el.style.pointerEvents = 'none'; };
@@ -93,30 +108,33 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
       body.appendChild(hint('Заданий пока нет.'));
       return;
     }
-    const kindLabel = { daily: 'суточное', weekly: 'недельное', story: 'сюжетное' };
+    const kindLabel = { daily: 'ЕЖЕДНЕВНЫЙ', weekly: 'НЕДЕЛЬНЫЙ', story: 'СЮЖЕТ' };
     const kindColor = { daily: '#7db8f0', weekly: '#b39cf0', story: '#e5c07b' };
     for (const q of quests) {
-      const c = card();
+      // сюжетные — с цветной рамкой (как в макете)
+      const c = card(q.kind === 'story' ? kindColor.story : undefined);
+      const kindTag = document.createElement('div');
+      kindTag.textContent = kindLabel[q.kind];
+      kindTag.style.cssText = `flex:0 0 6.5em;font-size:0.62em;letter-spacing:2px;
+        color:${kindColor[q.kind]};`;
+      c.appendChild(kindTag);
       const info = document.createElement('div');
       info.style.cssText = 'flex:1;min-width:0;';
       const title = document.createElement('div');
       title.textContent = q.title;
-      title.style.fontWeight = '600';
-      const meta = document.createElement('div');
-      meta.textContent = kindLabel[q.kind];
-      meta.style.cssText = `font-size:0.72em;color:${kindColor[q.kind]};letter-spacing:1px;`;
-      info.append(meta, title);
+      title.style.cssText = 'font-weight:400;color:#e6edf3;';
+      info.append(title);
       if (q.description) {
         const d = document.createElement('div');
         d.textContent = q.description;
-        d.style.cssText = 'font-size:0.8em;opacity:0.6;margin-top:0.2em;';
+        d.style.cssText = 'font-size:0.78em;color:#8fa2af;margin-top:0.25em;font-weight:300;';
         info.appendChild(d);
       }
       const reward = rewardLabel(q.rewardEffects, q.rewardItems);
       if (reward) {
         const r = document.createElement('div');
-        r.textContent = `Награда: ${reward}`;
-        r.style.cssText = 'font-size:0.78em;color:#e5c07b;margin-top:0.35em;';
+        r.textContent = `НАГРАДА · ${reward}`;
+        r.style.cssText = 'font-size:0.66em;letter-spacing:1.5px;color:#e5c07b;margin-top:0.5em;opacity:0.9;';
         info.appendChild(r);
       }
       c.appendChild(info);
@@ -291,24 +309,69 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
     }
   }
 
-  /** Оверлей с «куском правды» */
+  /** Оверлей «кусок правды» — терминал OldNet (скан-линии, амбер-сбой) */
   function showTruth(title: string, text: string) {
     const o = document.createElement('div');
-    o.style.cssText = `position:absolute;inset:0;background:rgba(1,3,5,0.93);z-index:70;
+    o.style.cssText = `position:absolute;inset:0;background:rgba(1,3,5,0.96);z-index:70;
       display:flex;align-items:center;justify-content:center;pointer-events:auto;`;
     const box = document.createElement('div');
-    box.style.cssText = `max-width:60%;background:#0a1016;border:1px solid #2a6f68;
-      border-radius:0.6em;padding:1.4em 1.8em;font-size:0.9em;`;
+    // скан-линии терминала
+    box.style.cssText = `width:66%;max-height:84%;overflow-y:auto;background:
+      repeating-linear-gradient(0deg, rgba(79,209,197,0.02) 0px, rgba(79,209,197,0.02) 1px,
+      transparent 1px, transparent 4px), #070c11;
+      border:1px solid rgba(79,209,197,0.25);font-size:0.85em;display:flex;flex-direction:column;`;
+
+    // шапка терминала
+    let hash = 0;
+    for (const ch of title) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+    const header = document.createElement('div');
+    header.style.cssText = `display:flex;justify-content:space-between;align-items:center;
+      padding:0.7em 1.4em;border-bottom:1px solid rgba(79,209,197,0.18);`;
+    const hl = document.createElement('div');
+    hl.innerHTML = `<span style="color:#e06c75">●</span> OLDNET · ДОСТУП ВОССТАНОВЛЕН`;
+    hl.style.cssText = 'font-size:0.7em;letter-spacing:3px;color:#4fd1c5;';
+    const hr = document.createElement('div');
+    hr.textContent = `ЦЕЛОСТНОСТЬ ${30 + (hash % 41)}%`;
+    hr.style.cssText = 'font-size:0.7em;letter-spacing:3px;color:#5f7a8a;';
+    header.append(hl, hr);
+    box.appendChild(header);
+
+    const content = document.createElement('div');
+    content.style.cssText = 'padding:1.4em 1.8em;flex:1;';
     const h1 = document.createElement('div');
-    h1.textContent = `⌬ ${title}`;
-    h1.style.cssText = 'color:#4fd1c5;letter-spacing:2px;margin-bottom:0.8em;font-size:0.8em;';
-    const t = document.createElement('div');
-    t.textContent = text;
-    t.style.cssText = 'line-height:1.6;white-space:pre-wrap;font-style:italic;color:#aebfca;';
+    h1.textContent = title.toUpperCase();
+    h1.style.cssText = 'color:#5f7a8a;letter-spacing:4px;margin-bottom:1em;font-size:0.72em;';
+    content.appendChild(h1);
+
+    // абзацы: [в скобках] — «тёплый сбой» (амбер-блок), остальное — крупная цитата
+    for (const para of text.split(/\n\n+/)) {
+      if (/^\[.*\]$/s.test(para.trim())) {
+        const warn = document.createElement('div');
+        warn.textContent = para.trim().replace(/^\[|\]$/g, '');
+        warn.style.cssText = `margin:1.1em 0;padding:0.8em 1.1em;font-style:italic;
+          color:#e5c07b;background:rgba(229,192,123,0.05);
+          border-left:2px solid #e5c07b;line-height:1.6;font-weight:300;`;
+        content.appendChild(warn);
+      } else {
+        const q = document.createElement('div');
+        q.textContent = para;
+        q.style.cssText = 'color:#dfe8ee;line-height:1.7;font-weight:300;font-size:1.05em;margin:0.5em 0;';
+        content.appendChild(q);
+      }
+    }
+    box.appendChild(content);
+
+    const foot = document.createElement('div');
+    foot.style.cssText = `display:flex;justify-content:space-between;align-items:center;
+      padding:0.9em 1.4em;border-top:1px solid rgba(79,209,197,0.14);`;
+    const fl = document.createElement('div');
+    fl.textContent = 'ДОБАВЛЕНО В АРХИВ';
+    fl.style.cssText = 'font-size:0.66em;letter-spacing:3px;color:#5f7a8a;';
     const ok = btn('Закрыть', true);
-    ok.style.marginTop = '1.2em';
     ok.onclick = () => o.remove();
-    box.append(h1, t, ok);
+    foot.append(fl, ok);
+    box.appendChild(foot);
+
     o.appendChild(box);
     layer.appendChild(o);
   }
@@ -344,9 +407,8 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
   function render() {
     for (const [key, el] of tabEls) {
       const active = key === tab;
-      el.style.borderColor = active ? '#2a6f68' : 'transparent';
-      el.style.color = active ? '#4fd1c5' : '#cfd9e2';
-      el.style.background = active ? 'rgba(79,209,197,0.07)' : '';
+      el.style.borderBottomColor = active ? accent : 'transparent';
+      el.style.color = active ? '#e6edf3' : '#5f7a8a';
     }
     body.innerHTML = '';
     if (tab === 'quests') renderQuests();

@@ -411,37 +411,50 @@ export class Engine {
     wrap.style.cssText = `position:absolute;top:2.5%;left:calc(2% + 2.1em);display:flex;align-items:center;
       gap:0.5em;pointer-events:none;`;
 
+    const accent = this.project.theme.accent;
+
     const lvl = document.createElement('div');
     lvl.textContent = String(v('lvl'));
     lvl.title = `Уровень ${v('lvl')} · опыт ${Math.floor(v('exp'))}/${v('exp_need')}`;
-    lvl.style.cssText = `width:1.6em;height:1.6em;border-radius:50%;display:flex;align-items:center;
-      justify-content:center;background:rgba(10,16,22,0.85);border:1px solid #e5c07b88;
-      color:#e5c07b;font-size:0.8em;font-weight:600;`;
+    lvl.style.cssText = `width:1.8em;height:1.8em;border-radius:50%;display:flex;align-items:center;
+      justify-content:center;border:1px solid rgba(255,255,255,0.22);
+      color:#cfd9e2;font-size:0.75em;font-weight:300;`;
     wrap.appendChild(lvl);
 
     const bars = document.createElement('div');
-    bars.style.cssText = 'display:flex;flex-direction:column;gap:0.25em;width:8.5em;';
+    bars.style.cssText = 'display:flex;flex-direction:column;gap:0.45em;';
     const mkBar = (cur: number, max: number, color: string, label: string) => {
+      const row = document.createElement('div');
+      row.title = `${label === 'HP' ? 'Здоровье' : 'Фокус'}: ${Math.floor(cur)}/${Math.floor(max)}`;
+      row.style.cssText = 'display:flex;align-items:center;gap:0.5em;';
+      const l = document.createElement('span');
+      l.textContent = label;
+      l.style.cssText = `font-size:0.5em;letter-spacing:2px;color:#5f7a8a;width:2.2em;`;
+      row.appendChild(l);
       const b = document.createElement('div');
-      b.title = `${label}: ${Math.floor(cur)}/${Math.floor(max)}`;
-      b.style.cssText = `height:0.5em;border-radius:1em;background:rgba(10,16,22,0.85);
-        border:1px solid rgba(255,255,255,0.14);overflow:hidden;`;
+      b.style.cssText = `width:8.5em;height:3px;background:rgba(255,255,255,0.09);overflow:hidden;`;
       const f = document.createElement('div');
       f.style.cssText = `height:100%;width:${max > 0 ? (cur / max) * 100 : 0}%;background:${color};
-        border-radius:1em;transition:width .3s;`;
+        transition:width .3s;`;
       b.appendChild(f);
-      return b;
+      row.appendChild(b);
+      return row;
     };
-    bars.appendChild(mkBar(v('hp'), v('hp_max'), '#e06c75', 'Здоровье'));
-    bars.appendChild(mkBar(v('foc'), v('foc_max'), '#7db8f0', 'Фокус'));
+    bars.appendChild(mkBar(v('hp'), v('hp_max'), '#e06c75', 'HP'));
+    bars.appendChild(mkBar(v('foc'), v('foc_max'), '#7db8f0', 'FOC'));
     wrap.appendChild(bars);
 
-    const inv = document.createElement('div');
-    inv.textContent = '🎒';
-    inv.title = 'Инвентарь';
-    inv.style.cssText = `width:1.7em;height:1.7em;display:flex;align-items:center;justify-content:center;
-      border-radius:0.4em;background:rgba(10,16,22,0.85);border:1px solid rgba(255,255,255,0.18);
-      cursor:pointer;pointer-events:auto;user-select:none;`;
+    const quietBtn = (glyph: string, title: string) => {
+      const b = document.createElement('div');
+      b.textContent = glyph;
+      b.title = title;
+      b.style.cssText = `width:1.7em;height:1.7em;display:flex;align-items:center;justify-content:center;
+        cursor:pointer;pointer-events:auto;user-select:none;opacity:0.6;transition:opacity .15s;`;
+      b.onmouseenter = () => { b.style.opacity = '1'; };
+      b.onmouseleave = () => { b.style.opacity = '0.6'; };
+      return b;
+    };
+    const inv = quietBtn('🎒', 'Инвентарь');
     inv.onclick = () => { this.invOpen = !this.invOpen; this.renderInventory(); };
     wrap.appendChild(inv);
 
@@ -449,27 +462,23 @@ export class Engine {
     const hasJournal = (this.project.quests?.length ?? 0) + (this.project.upgrades?.length ?? 0)
       + (this.project.decodes?.length ?? 0) > 0;
     if (hasJournal) {
-      const j = document.createElement('div');
-      j.textContent = '📋';
-      j.title = 'Журнал: задания, улучшения, OldNet';
-      j.style.cssText = inv.style.cssText;
+      const j = quietBtn('📋', 'Журнал: задания, улучшения, OldNet');
       j.onclick = () => this.openJournal();
       wrap.appendChild(j);
     }
 
     this.hudLayer.appendChild(wrap);
 
-    // кредиты — правый край HUD
+    // валюта — правый край HUD, тихая строка
     const curName = this.project.currencyVarName ?? 'credits';
     const curId = heroVarId(this.project, curName);
     if (curId) {
       const cred = document.createElement('div');
       cred.textContent = `⌬ ${Math.floor(Number(this.state[curId] ?? 0))}`;
       cred.title = this.project.variables.find((x) => x.id === curId)?.title ?? 'Кредиты';
-      cred.style.cssText = `position:absolute;top:2.5%;right:2%;height:1.7em;display:flex;
-        align-items:center;padding:0 0.7em;border-radius:0.4em;background:rgba(10,16,22,0.85);
-        border:1px solid ${this.project.theme.accent}55;color:${this.project.theme.accent};
-        font-size:0.85em;letter-spacing:1px;`;
+      cred.style.cssText = `position:absolute;top:2.5%;right:2%;height:1.8em;display:flex;
+        align-items:center;color:${accent};opacity:0.85;
+        font-size:0.8em;letter-spacing:2px;`;
       this.hudLayer.appendChild(cred);
     }
   }
@@ -482,45 +491,49 @@ export class Engine {
     const btn = document.createElement('div');
     btn.textContent = '◈';
     btn.title = 'Осколок: репутация фракций';
-    btn.style.cssText = `position:absolute;top:2.5%;left:2%;width:1.7em;height:1.7em;
-      display:flex;align-items:center;justify-content:center;border-radius:0.4em;
-      background:rgba(10,16,22,0.85);border:1px solid ${this.project.theme.accent}55;
-      color:${this.project.theme.accent};cursor:pointer;pointer-events:auto;user-select:none;`;
+    btn.style.cssText = `position:absolute;top:2.5%;left:2%;width:1.8em;height:1.8em;
+      display:flex;align-items:center;justify-content:center;
+      color:${this.project.theme.accent};cursor:pointer;pointer-events:auto;user-select:none;
+      opacity:${this.factionPanelOpen ? '1' : '0.7'};transition:opacity .15s;`;
+    btn.onmouseenter = () => { btn.style.opacity = '1'; };
+    btn.onmouseleave = () => { btn.style.opacity = this.factionPanelOpen ? '1' : '0.7'; };
     btn.onclick = () => { this.factionPanelOpen = !this.factionPanelOpen; this.renderHUD(); };
     this.hudLayer.appendChild(btn);
 
     if (!this.factionPanelOpen) return;
     const panel = document.createElement('div');
-    panel.style.cssText = `position:absolute;top:2.5%;left:calc(2% + 2.1em);min-width:11em;
-      background:rgba(8,13,18,0.94);border:1px solid rgba(255,255,255,0.1);
-      border-radius:0.5em;padding:0.7em 0.9em;pointer-events:auto;
-      font-size:0.72em;color:#cfd9e2;backdrop-filter:blur(4px);`;
+    panel.style.cssText = `position:absolute;top:calc(2.5% + 2.4em);left:2%;min-width:12em;
+      background:rgba(5,9,13,0.94);border:1px solid rgba(255,255,255,0.08);
+      border-top:1px solid ${this.project.theme.accent}33;
+      padding:0.9em 1.1em;pointer-events:auto;
+      font-size:0.72em;color:#cfd9e2;backdrop-filter:blur(8px);`;
     const title = document.createElement('div');
     title.textContent = 'РЕПУТАЦИЯ ФРАКЦИЙ';
-    title.style.cssText = `letter-spacing:2px;font-size:0.72em;opacity:0.55;margin-bottom:0.7em;`;
+    title.style.cssText = `letter-spacing:3px;font-size:0.7em;color:#5f7a8a;margin-bottom:0.9em;`;
     panel.appendChild(title);
     for (const f of factions) {
       const info = computeFactionRep(this.project, f, (id) => this.state[id]);
       const row = document.createElement('div');
-      row.style.cssText = 'margin-bottom:0.6em;';
+      row.style.cssText = 'margin-bottom:0.7em;';
       const top = document.createElement('div');
-      top.style.cssText = 'display:flex;justify-content:space-between;gap:1.5em;';
+      top.style.cssText = 'display:flex;justify-content:space-between;gap:1.5em;align-items:baseline;';
       const nm = document.createElement('span');
       nm.textContent = f.name;
-      nm.style.color = f.color;
+      nm.style.cssText = `color:${f.color};letter-spacing:1px;`;
       const val = document.createElement('span');
       val.textContent = info.met > 0 ? `${info.rep}%` : '—';
+      val.style.opacity = '0.8';
       top.append(nm, val);
       row.appendChild(top);
       const meta = document.createElement('div');
       meta.textContent = `связей: ${info.met} из ${info.total}`;
-      meta.style.cssText = 'opacity:0.45;font-size:0.85em;';
+      meta.style.cssText = 'opacity:0.4;font-size:0.82em;margin-top:0.1em;';
       row.appendChild(meta);
       const bar = document.createElement('div');
-      bar.style.cssText = `margin-top:0.25em;height:0.25em;border-radius:1em;
-        background:rgba(255,255,255,0.1);overflow:hidden;`;
+      bar.style.cssText = `margin-top:0.35em;height:2px;
+        background:rgba(255,255,255,0.08);overflow:hidden;`;
       const fill = document.createElement('div');
-      fill.style.cssText = `height:100%;width:${info.rep}%;background:${f.color};border-radius:1em;`;
+      fill.style.cssText = `height:100%;width:${info.rep}%;background:${f.color};`;
       bar.appendChild(fill);
       row.appendChild(bar);
       panel.appendChild(row);
@@ -771,11 +784,11 @@ export class Engine {
     const t = this.project.theme;
     this.dialogueLayer.innerHTML = '';
     const box = document.createElement('div');
-    box.style.cssText = `position:absolute;left:6%;right:6%;bottom:4%;
+    box.style.cssText = `position:absolute;left:8%;right:8%;bottom:5%;
       background:${t.dialogueBox};color:${t.dialogueText};
-      border:1px solid rgba(255,255,255,0.08);border-radius:10px;
-      padding:2.2% 3%;pointer-events:auto;backdrop-filter:blur(6px);
-      font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.5;`;
+      border:1px solid rgba(255,255,255,0.07);border-top:1px solid ${t.accent}22;
+      padding:2% 3.2%;pointer-events:auto;backdrop-filter:blur(8px);
+      font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.55;`;
     this.dialogueLayer.appendChild(box);
     return box;
   }
@@ -794,25 +807,26 @@ export class Engine {
         this.scheduleSave();
       }
       const head = document.createElement('div');
-      head.style.cssText = 'display:flex;align-items:center;gap:0.7em;margin-bottom:0.55em;';
+      head.style.cssText = 'display:flex;align-items:center;gap:0.8em;margin-bottom:0.7em;';
       const img = document.createElement('img');
       img.src = npcPortrait(this.project, npc);
-      img.style.cssText = `width:2.4em;height:2.4em;border-radius:0.35em;flex:0 0 auto;`;
+      img.style.cssText = `width:2.6em;height:2.6em;border-radius:50%;flex:0 0 auto;
+        border:1px solid ${t.accent}55;padding:2px;box-sizing:border-box;`;
       head.appendChild(img);
       const nameWrap = document.createElement('div');
       const sp = document.createElement('div');
-      sp.style.cssText = `color:${t.speakerColor};font-size:0.75em;letter-spacing:2px;
+      sp.style.cssText = `color:${t.speakerColor};font-size:0.68em;letter-spacing:4px;
         text-transform:uppercase;font-weight:600;`;
       sp.textContent = npc.name;
       nameWrap.appendChild(sp);
-      // Осколок ур.1+: видно отношение собеседника
+      // Осколок ур.1+: видно отношение собеседника (тонкая hairline-шкала)
       if (this.oskolokLevel >= 1) {
         const rel = Number(this.state[npc.relationVarId] ?? 0);
         const bar = document.createElement('div');
-        bar.style.cssText = `margin-top:0.25em;width:9em;height:0.28em;border-radius:1em;
-          background:rgba(255,255,255,0.12);overflow:hidden;`;
+        bar.style.cssText = `margin-top:0.4em;width:10em;height:2px;
+          background:rgba(255,255,255,0.09);overflow:hidden;`;
         const fill = document.createElement('div');
-        fill.style.cssText = `height:100%;width:${rel}%;border-radius:1em;
+        fill.style.cssText = `height:100%;width:${rel}%;
           background:${relColor(rel)};transition:width .3s;`;
         bar.appendChild(fill);
         bar.title = `Отношение: ${rel}/100`;
@@ -822,8 +836,8 @@ export class Engine {
       box.appendChild(head);
     } else if (n.speaker) {
       const sp = document.createElement('div');
-      sp.style.cssText = `color:${t.speakerColor};font-size:0.75em;letter-spacing:2px;
-        text-transform:uppercase;margin-bottom:0.5em;font-weight:600;`;
+      sp.style.cssText = `color:${t.speakerColor};font-size:0.68em;letter-spacing:4px;
+        text-transform:uppercase;margin-bottom:0.6em;font-weight:600;`;
       sp.textContent = n.speaker;
       box.appendChild(sp);
     }
@@ -833,8 +847,9 @@ export class Engine {
     box.appendChild(txt);
 
     const hint = document.createElement('div');
-    hint.style.cssText = `margin-top:0.8em;text-align:right;opacity:0.45;font-size:0.65em;`;
-    hint.textContent = '▸ дальше';
+    hint.style.cssText = `margin-top:1em;text-align:right;opacity:0.4;font-size:0.6em;
+      letter-spacing:3px;text-transform:uppercase;`;
+    hint.textContent = 'дальше ▸';
     box.appendChild(hint);
 
     box.style.cursor = 'pointer';
@@ -851,28 +866,37 @@ export class Engine {
     const available = (n.choices ?? []).filter((c) => this.checkConditions(c.conditions));
     const relIds = new Set((this.project.npcs ?? []).map((x) => x.relationVarId));
     for (const c of available) {
-      const btn = document.createElement('div');
-      btn.style.cssText = `background:${t.choiceBg};color:${t.choiceText};
-        padding:0.6em 1em;border-radius:6px;cursor:pointer;
-        border:1px solid rgba(255,255,255,0.06);transition:background .15s;`;
-      btn.textContent = this.interpolate(c.text);
-      // Осколок ур.3+: подсказки — как вариант повлияет на отношения
+      // Осколок ур.3+: маркер слева — как вариант повлияет на отношения
+      let delta = 0;
       if (this.oskolokLevel >= 3) {
-        let delta = 0;
         for (const e of c.effects) {
           if (!relIds.has(e.varId)) continue;
           if (e.op === 'add') delta += Number(e.value);
           if (e.op === 'sub') delta -= Number(e.value);
         }
-        if (delta !== 0) {
-          const mark = document.createElement('span');
-          mark.textContent = delta > 0 ? ' ▲' : ' ▼';
-          mark.style.color = delta > 0 ? '#98c379' : '#e06c75';
-          btn.appendChild(mark);
-        }
       }
-      btn.onmouseenter = () => { btn.style.background = t.choiceHover; };
-      btn.onmouseleave = () => { btn.style.background = t.choiceBg; };
+      const btn = document.createElement('div');
+      btn.style.cssText = `background:${t.choiceBg};color:${t.choiceText};
+        padding:0.5em 1em 0.5em 0.9em;cursor:pointer;display:flex;gap:0.8em;
+        align-items:baseline;border-left:2px solid transparent;
+        transition:background .15s,border-color .15s;`;
+      const mark = document.createElement('span');
+      mark.style.cssText = 'flex:0 0 1em;font-size:0.7em;';
+      if (delta > 0) { mark.textContent = '▲'; mark.style.color = '#98c379'; }
+      else if (delta < 0) { mark.textContent = '▼'; mark.style.color = '#e06c75'; }
+      else { mark.textContent = '◊'; mark.style.color = `${t.accent}66`; }
+      btn.appendChild(mark);
+      const txt = document.createElement('span');
+      txt.textContent = this.interpolate(c.text);
+      btn.appendChild(txt);
+      btn.onmouseenter = () => {
+        btn.style.background = t.choiceHover;
+        btn.style.borderLeftColor = t.accent;
+      };
+      btn.onmouseleave = () => {
+        btn.style.background = t.choiceBg;
+        btn.style.borderLeftColor = 'transparent';
+      };
       btn.onclick = () => {
         this.applyEffects(c.effects);
         this.advance(c.next);
@@ -905,104 +929,150 @@ export class Engine {
     };
     this.invLayer.appendChild(backdrop);
 
+    const accent = this.project.theme.accent;
     const panel = document.createElement('div');
     panel.style.cssText = `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
-      width:82%;max-height:88%;background:#0c1218;border:1px solid rgba(255,255,255,0.12);
-      border-radius:0.6em;padding:1em 1.2em;display:flex;gap:1.2em;font-size:0.75em;
-      color:#cfd9e2;overflow:hidden;`;
+      width:84%;height:88%;background:rgba(6,10,14,0.97);border:1px solid rgba(255,255,255,0.08);
+      border-top:1px solid ${accent}33;padding:1.2em 1.6em;display:flex;flex-direction:column;
+      gap:0.8em;font-size:0.75em;color:#cfd9e2;overflow:hidden;`;
     backdrop.appendChild(panel);
 
-    // ---- манекен ----
-    const left = document.createElement('div');
-    left.style.cssText = 'flex:0 0 34%;display:flex;flex-direction:column;gap:0.5em;';
-    const lt = document.createElement('div');
-    lt.textContent = 'ЭКИПИРОВКА';
-    lt.style.cssText = 'letter-spacing:2px;opacity:0.5;font-size:0.75em;';
-    left.appendChild(lt);
-    const slotsGrid = document.createElement('div');
-    slotsGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:0.5em;';
-    const slotOrder: ItemSlot[] = ['head', 'body', 'legs', 'feet', 'hands', 'weapon', 'gadget', 'accessory'];
-    for (const slot of slotOrder) {
-      slotsGrid.appendChild(this.slotCell(slot));
-    }
-    left.appendChild(slotsGrid);
-
-    // сводка характеристик
-    const stats = document.createElement('div');
-    stats.style.cssText = `margin-top:0.6em;display:grid;grid-template-columns:1fr auto;
-      gap:0.15em 1em;font-size:0.82em;opacity:0.9;`;
     const v = (name: string) => Number(this.state[heroVarId(this.project, name) ?? ''] ?? 0);
-    const addStat = (label: string, val: string) => {
-      const a = document.createElement('span'); a.textContent = label; a.style.opacity = '0.6';
-      const b = document.createElement('span'); b.textContent = val; b.style.textAlign = 'right';
-      stats.append(a, b);
-    };
-    addStat('Уровень', `${v('lvl')}  (${Math.floor(v('exp'))}/${v('exp_need')})`);
-    for (const k of STAT_KEYS) addStat(STAT_LABELS[k], String(v(k)));
-    left.appendChild(stats);
-    panel.appendChild(left);
-
-    // ---- ячейки ----
-    const right = document.createElement('div');
-    right.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:0.5em;min-width:0;';
-    const head = document.createElement('div');
-    head.style.cssText = 'display:flex;align-items:center;gap:0.6em;';
-    const rt = document.createElement('div');
     const cells = computeCells(this.project, v('endur'), this.equippedItems());
-    rt.textContent = `ИНВЕНТАРЬ · ${this.inventory.length}/${cells}`;
-    rt.style.cssText = 'letter-spacing:2px;opacity:0.5;font-size:0.75em;flex:1;';
-    head.appendChild(rt);
+
+    // ---- шапка ----
+    const headRow = document.createElement('div');
+    headRow.style.cssText = 'display:flex;align-items:baseline;gap:1.2em;';
+    const title = document.createElement('div');
+    title.textContent = 'ИНВЕНТАРЬ';
+    title.style.cssText = 'font-size:1.5em;font-weight:200;letter-spacing:8px;color:#e6edf3;';
+    headRow.appendChild(title);
+    const kicker = document.createElement('div');
+    kicker.textContent = `РЮКЗАК · ${this.inventory.length} ИЗ ${cells}`;
+    kicker.style.cssText = 'font-size:0.72em;letter-spacing:3px;color:#5f7a8a;flex:1;';
+    headRow.appendChild(kicker);
     const mkSort = (label: string, fn: (a: InvCell, b: InvCell) => number) => {
       const b = document.createElement('div');
       b.textContent = label;
-      b.style.cssText = `padding:0.15em 0.6em;border:1px solid rgba(255,255,255,0.15);
-        border-radius:0.3em;cursor:pointer;font-size:0.75em;opacity:0.75;`;
+      b.style.cssText = `cursor:pointer;font-size:0.7em;letter-spacing:2px;color:#5f7a8a;
+        border-bottom:1px solid transparent;transition:color .15s;text-transform:uppercase;`;
+      b.onmouseenter = () => { b.style.color = '#cfd9e2'; };
+      b.onmouseleave = () => { b.style.color = '#5f7a8a'; };
       b.onclick = () => { this.inventory.sort(fn); this.scheduleSave(); this.renderInventory(); };
       return b;
     };
     const defOf = (c: InvCell) => this.itemDef(c.itemId);
-    head.appendChild(mkSort('по типу', (a, b) => (defOf(a)?.type ?? '').localeCompare(defOf(b)?.type ?? '')));
-    head.appendChild(mkSort('по редкости', (a, b) =>
+    headRow.appendChild(mkSort('по типу', (a, b) => (defOf(a)?.type ?? '').localeCompare(defOf(b)?.type ?? '')));
+    headRow.appendChild(mkSort('по редкости', (a, b) =>
       (RARITY_META[defOf(b)?.rarity ?? 'junk'].order) - (RARITY_META[defOf(a)?.rarity ?? 'junk'].order)));
     const close = document.createElement('div');
     close.textContent = '✕';
-    close.style.cssText = 'cursor:pointer;opacity:0.6;padding:0 0.3em;';
+    close.style.cssText = 'cursor:pointer;opacity:0.5;padding:0 0.3em;';
     close.onclick = () => { this.invOpen = false; this.renderInventory(); };
-    head.appendChild(close);
-    right.appendChild(head);
+    headRow.appendChild(close);
+    panel.appendChild(headRow);
 
+    const body = document.createElement('div');
+    body.style.cssText = 'flex:1;display:flex;gap:1.6em;min-height:0;';
+    panel.appendChild(body);
+
+    // ---- манекен: слоты вокруг силуэта ----
+    const left = document.createElement('div');
+    left.style.cssText = 'flex:0 0 40%;display:flex;flex-direction:column;gap:0.6em;min-height:0;';
+    const manWrap = document.createElement('div');
+    manWrap.style.cssText = 'flex:1;display:flex;gap:0.7em;min-height:0;align-items:stretch;';
+    const colL = document.createElement('div');
+    colL.style.cssText = 'display:flex;flex-direction:column;justify-content:space-between;gap:0.5em;flex:0 0 34%;';
+    const colR = document.createElement('div');
+    colR.style.cssText = colL.style.cssText;
+    // силуэт героя по центру
+    const sil = document.createElement('div');
+    sil.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;opacity:0.5;';
+    const silSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 130" width="100%" height="100%">
+<g fill="none" stroke="${accent}" stroke-opacity="0.35" stroke-width="1.4">
+<circle cx="30" cy="14" r="9"/>
+<path d="M30 23 L30 78 M30 34 L12 58 M30 34 L48 58 M30 78 L18 122 M30 78 L42 122"/>
+<path d="M14 30 Q30 24 46 30" stroke-opacity="0.2"/>
+</g></svg>`;
+    const silImg = document.createElement('img');
+    silImg.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(silSvg);
+    silImg.style.cssText = 'max-height:100%;max-width:100%;';
+    silImg.draggable = false;
+    sil.appendChild(silImg);
+
+    for (const slot of ['head', 'weapon', 'hands', 'legs'] as ItemSlot[]) colL.appendChild(this.slotCell(slot));
+    for (const slot of ['body', 'accessory', 'gadget', 'feet'] as ItemSlot[]) colR.appendChild(this.slotCell(slot));
+    manWrap.append(colL, sil, colR);
+    left.appendChild(manWrap);
+
+    // сводка ключевых характеристик — тихая капс-строка
+    const stats = document.createElement('div');
+    stats.style.cssText = `display:flex;flex-wrap:wrap;gap:0.4em 1.3em;font-size:0.72em;
+      letter-spacing:2px;color:#5f7a8a;border-top:1px solid rgba(255,255,255,0.07);padding-top:0.8em;`;
+    const addStat = (label: string, val: string | number, titleFull?: string) => {
+      const s = document.createElement('span');
+      s.innerHTML = `${label} <span style="color:#cfd9e2">${val}</span>`;
+      if (titleFull) s.title = titleFull;
+      stats.appendChild(s);
+    };
+    addStat('УР', `${v('lvl')}`, `Опыт: ${Math.floor(v('exp'))}/${v('exp_need')}`);
+    addStat('АТК', v('atk'), STAT_LABELS['atk']);
+    addStat('ЗАЩ', v('def'), STAT_LABELS['def']);
+    addStat('ЛОВ', v('agi'), STAT_LABELS['agi']);
+    addStat('ВЫН', v('endur'), STAT_LABELS['endur']);
+    addStat('КРИТ', `${v('crit_chance')}%`, `${STAT_LABELS['crit_chance']} · сила ${v('crit_pow')}%`);
+    left.appendChild(stats);
+    body.appendChild(left);
+
+    // ---- ячейки рюкзака ----
+    const right = document.createElement('div');
+    right.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:0.6em;min-width:0;min-height:0;';
     const grid = document.createElement('div');
-    grid.style.cssText = `display:grid;grid-template-columns:repeat(auto-fill,minmax(3.4em,1fr));
-      gap:0.4em;overflow-y:auto;align-content:start;flex:1;`;
+    grid.style.cssText = `display:grid;grid-template-columns:repeat(auto-fill,minmax(3.6em,1fr));
+      gap:0.45em;overflow-y:auto;align-content:start;flex:1;`;
     for (let i = 0; i < cells; i++) {
       grid.appendChild(this.invCell(i));
     }
     right.appendChild(grid);
+
+    // легенда редкостей + подсказка
+    const foot = document.createElement('div');
+    foot.style.cssText = 'display:flex;align-items:center;gap:1.1em;flex-wrap:wrap;';
+    for (const meta of Object.values(RARITY_META)) {
+      const l = document.createElement('span');
+      l.innerHTML = `<span style="color:${meta.color}">●</span> ${meta.label}`;
+      l.style.cssText = 'font-size:0.62em;letter-spacing:1.5px;color:#5f7a8a;text-transform:uppercase;';
+      foot.appendChild(l);
+    }
+    right.appendChild(foot);
     const hint = document.createElement('div');
-    hint.textContent = 'Перетащите предмет на слот, чтобы экипировать · клик — действия';
-    hint.style.cssText = 'opacity:0.35;font-size:0.7em;';
+    hint.textContent = 'ПЕРЕТАЩИТЬ НА СЛОТ — ЭКИПИРОВАТЬ · КЛИК — ДЕЙСТВИЯ';
+    hint.style.cssText = 'opacity:0.3;font-size:0.6em;letter-spacing:2px;';
     right.appendChild(hint);
-    panel.appendChild(right);
+    body.appendChild(right);
   }
 
   private slotCell(slot: ItemSlot): HTMLElement {
     const cell = document.createElement('div');
     cell.dataset.slot = slot;
-    cell.style.cssText = `height:3.6em;border:1px dashed rgba(255,255,255,0.18);border-radius:0.4em;
-      display:flex;align-items:center;gap:0.5em;padding:0 0.5em;position:relative;`;
+    cell.style.cssText = `flex:1;min-height:3.2em;border:1px dashed rgba(255,255,255,0.14);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.25em;
+      padding:0.3em;position:relative;`;
     const id = this.equipment[slot];
     const def = id ? this.itemDef(id) : null;
     if (def) {
-      cell.style.border = `1px solid ${RARITY_META[def.rarity].color}66`;
+      const color = RARITY_META[def.rarity].color;
+      cell.style.border = `1px solid ${color}77`;
+      cell.style.boxShadow = `0 0 12px ${color}22 inset`;
       const img = document.createElement('img');
       img.src = itemIcon(def);
-      img.style.cssText = 'width:2.6em;height:2.6em;border-radius:0.3em;';
+      img.style.cssText = 'width:2em;height:2em;';
       img.draggable = false;
       cell.appendChild(img);
       const name = document.createElement('div');
       name.textContent = def.name;
-      name.style.cssText = `font-size:0.72em;color:${RARITY_META[def.rarity].color};
-        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;`;
+      name.style.cssText = `font-size:0.58em;letter-spacing:1px;color:${color};text-align:center;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%;text-transform:uppercase;`;
       cell.appendChild(name);
       cell.title = this.itemTooltip(def) + '\nКлик — снять';
       cell.style.cursor = 'pointer';
@@ -1010,7 +1080,7 @@ export class Engine {
     } else {
       const lbl = document.createElement('div');
       lbl.textContent = ITEM_SLOT_LABELS[slot];
-      lbl.style.cssText = 'font-size:0.7em;opacity:0.35;';
+      lbl.style.cssText = 'font-size:0.6em;letter-spacing:2px;color:#3d4a56;text-transform:uppercase;';
       cell.appendChild(lbl);
     }
     return cell;
@@ -1019,14 +1089,14 @@ export class Engine {
   private invCell(index: number): HTMLElement {
     const cell = document.createElement('div');
     cell.dataset.cell = String(index);
-    cell.style.cssText = `aspect-ratio:1;border:1px solid rgba(255,255,255,0.1);border-radius:0.4em;
+    cell.style.cssText = `aspect-ratio:1;border:1px dashed rgba(255,255,255,0.09);
       position:relative;display:flex;align-items:center;justify-content:center;
-      background:rgba(255,255,255,0.02);`;
+      background:rgba(255,255,255,0.015);`;
     const item = this.inventory[index];
     const def = item ? this.itemDef(item.itemId) : null;
     if (!item || !def) return cell;
 
-    cell.style.borderColor = `${RARITY_META[def.rarity].color}55`;
+    cell.style.border = `1px solid ${RARITY_META[def.rarity].color}55`;
     cell.style.cursor = 'grab';
     cell.title = this.itemTooltip(def);
     const img = document.createElement('img');

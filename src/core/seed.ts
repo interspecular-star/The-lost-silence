@@ -224,7 +224,12 @@ export function seedProject(): Project {
   // СЦЕНЫ
   // ============================================================
   const narrStyle = { textColor: '#aebfca', fontSize: 34, fontWeight: '300', textAlign: 'center' as const, lineHeight: 1.6 };
-  const btnStyle = { fill: 'rgba(230,237,243,0.05)', textColor: '#e6edf3', fontSize: 26, radius: 6, borderColor: '#33454f', borderWidth: 1, textAlign: 'center' as const };
+  // «тихие строки» — действия без коробок, только тонкая линия и разрядка
+  const btnStyle = {
+    fill: 'transparent', textColor: '#8fa2af', fontSize: 25, radius: 0,
+    borderColor: 'rgba(255,255,255,0.14)', borderWidth: 1,
+    textAlign: 'center' as const, letterSpacing: 2, fontWeight: '300',
+  };
 
   project.scenes = [
     {
@@ -235,23 +240,41 @@ export function seedProject(): Project {
       guides: [{ axis: 'x', pos: 960 }, { axis: 'y', pos: 540 }],
       elements: [
         {
+          id: uid('el'), name: 'Глиф', type: 'text',
+          x: 860, y: 160, w: 200, h: 70,
+          text: '◈',
+          style: { textColor: '#4fd1c5', fontSize: 52, textAlign: 'center', opacity: 0.9 },
+        },
+        {
+          id: uid('el'), name: 'Кикер', type: 'text',
+          x: 560, y: 250, w: 800, h: 42,
+          text: 'УЗЕЛ 7-Δ  ·  ЦИКЛ 7301',
+          style: { textColor: '#3d5666', fontSize: 22, fontWeight: '300', textAlign: 'center', letterSpacing: 10 },
+        },
+        {
           id: uid('el'), name: 'Заголовок', type: 'text',
-          x: 160, y: 330, w: 1600, h: 130,
-          text: 'THE LOST SILENCE',
-          style: { textColor: '#e6edf3', fontSize: 92, fontWeight: '200', textAlign: 'center', letterSpacing: 24, fontFamily: "'Segoe UI', sans-serif" },
+          x: 160, y: 330, w: 1600, h: 240,
+          text: 'УТРАЧЕННАЯ\nТИШИНА',
+          style: { textColor: '#e6edf3', fontSize: 92, fontWeight: '200', textAlign: 'center', letterSpacing: 30, lineHeight: 1.25, fontFamily: "'Segoe UI', sans-serif" },
         },
         {
           id: uid('el'), name: 'Подзаголовок', type: 'text',
-          x: 460, y: 480, w: 1000, h: 60,
-          text: '2670. Мир выжил. Тишина — нет.',
-          style: { textColor: '#5f7a8a', fontSize: 28, fontWeight: '300', textAlign: 'center', letterSpacing: 6 },
+          x: 460, y: 610, w: 1000, h: 50,
+          text: '600 лет в капсуле. Мир не заметил.',
+          style: { textColor: '#5f7a8a', fontSize: 26, fontWeight: '300', textAlign: 'center', letterSpacing: 5 },
         },
         {
           id: uid('el'), name: 'Кнопка «Начать»', type: 'button',
-          x: 810, y: 640, w: 300, h: 72,
-          text: 'НАЧАТЬ',
-          style: { fill: 'rgba(79,209,197,0.10)', textColor: '#4fd1c5', fontSize: 26, letterSpacing: 8, radius: 4, borderColor: '#2a6f68', borderWidth: 1, textAlign: 'center' },
+          x: 760, y: 740, w: 400, h: 68,
+          text: '01   НАЧАТЬ',
+          style: { fill: 'transparent', textColor: '#e6edf3', fontSize: 27, letterSpacing: 10, radius: 0, borderColor: 'rgba(79,209,197,0.4)', borderWidth: 1, textAlign: 'center', fontWeight: '300' },
           action: { type: 'gotoScene', sceneId: sWake1 },
+        },
+        {
+          id: uid('el'), name: 'Версия', type: 'text',
+          x: 60, y: 1010, w: 400, h: 36,
+          text: 'ВЕРСИЯ 0.7-Δ · ДЕМО',
+          style: { textColor: '#2c3c48', fontSize: 17, fontWeight: '300', textAlign: 'left', letterSpacing: 4 },
         },
       ],
     },
@@ -350,7 +373,7 @@ export function seedProject(): Project {
           id: uid('el'), name: 'Дрон (бой)', type: 'button',
           x: 1240, y: 480, w: 420, h: 70,
           text: '⚔ Дрон-охранник ожил!',
-          style: { ...btnStyle, fill: 'rgba(224,108,117,0.08)', textColor: '#e06c75', borderColor: '#7a3a40' },
+          style: { ...btnStyle, textColor: '#e06c75', borderColor: 'rgba(224,108,117,0.35)' },
           action: { type: 'startCombat', mobId: mobDrone, winDialogueId: dAfterFight },
           visibleIf: [{ varId: vDroneDown, op: 'eq', value: false }, { varId: vLabTerminal, op: 'eq', value: true }],
         },
@@ -358,7 +381,7 @@ export function seedProject(): Project {
           id: uid('el'), name: 'Выход (после боя)', type: 'button',
           x: 710, y: 700, w: 500, h: 76,
           text: '➜ Подняться к разлому',
-          style: { ...btnStyle, textColor: '#4fd1c5', borderColor: '#2a6f68', fill: 'rgba(79,209,197,0.08)' },
+          style: { ...btnStyle, textColor: '#4fd1c5', borderColor: 'rgba(79,209,197,0.4)' },
           action: { type: 'gotoScene', sceneId: sSurface },
           visibleIf: [{ varId: vDroneDown, op: 'eq', value: true }],
         },

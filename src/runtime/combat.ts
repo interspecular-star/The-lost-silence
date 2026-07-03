@@ -37,96 +37,115 @@ export function runCombat(
   // ---------- UI ----------
   const layer = document.createElement('div');
   layer.style.cssText = `position:absolute;inset:0;z-index:40;pointer-events:auto;
-    background:rgba(3,6,9,0.88);backdrop-filter:blur(3px);display:flex;flex-direction:column;
+    background:rgba(3,6,9,0.94);backdrop-filter:blur(4px);display:flex;flex-direction:column;
     align-items:center;justify-content:space-between;font-size:calc(28 * 100cqw / ${CANVAS_W});
-    color:#cfd9e2;padding:3% 6%;`;
+    color:#cfd9e2;padding:3.5% 7%;`;
   engine.root.appendChild(layer);
 
-  // — моб —
+  // — верх: лог слева (курсив) + моб справа —
+  const top = document.createElement('div');
+  top.style.cssText = 'display:flex;width:100%;gap:2em;align-items:flex-start;';
+  const log = document.createElement('div');
+  log.style.cssText = `flex:1;font-style:italic;font-weight:300;color:#8fa2af;
+    font-size:0.9em;line-height:1.6;padding-top:1.5em;`;
+  log.textContent = `«${mob.name} приближается».`;
+  top.appendChild(log);
+
   const mobBox = document.createElement('div');
-  mobBox.style.cssText = 'display:flex;align-items:center;gap:1em;';
+  mobBox.style.cssText = 'flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:0.6em;';
+  const mobName = document.createElement('div');
+  mobName.textContent = mob.name.toUpperCase();
+  mobName.style.cssText = 'font-size:0.85em;font-weight:400;color:#e6edf3;letter-spacing:5px;';
+  mobBox.appendChild(mobName);
+  const mobHpBar = bar('#e06c75', '13em');
+  mobBox.appendChild(mobHpBar.wrap);
   const mobImg = document.createElement('img');
   mobImg.src = mobIcon(mob);
-  mobImg.style.cssText = 'width:4.5em;height:4.5em;border-radius:0.5em;';
+  mobImg.style.cssText = `width:7em;height:7em;border:1px solid rgba(255,255,255,0.1);
+    padding:0.4em;box-sizing:border-box;`;
+  mobImg.draggable = false;
   mobBox.appendChild(mobImg);
-  const mobInfo = document.createElement('div');
-  const mobName = document.createElement('div');
-  mobName.textContent = mob.name;
-  mobName.style.cssText = 'font-size:1.1em;font-weight:600;color:#e06c75;letter-spacing:1px;';
-  mobInfo.appendChild(mobName);
-  const mobHpBar = bar('#e06c75', '14em');
-  mobInfo.appendChild(mobHpBar.wrap);
-  mobBox.appendChild(mobInfo);
-  layer.appendChild(mobBox);
+  top.appendChild(mobBox);
+  layer.appendChild(top);
 
-  // — центр: лог + полоса замаха —
+  // — центр: подпись + полоса замаха —
   const mid = document.createElement('div');
-  mid.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:0.8em;width:60%;';
-  const log = document.createElement('div');
-  log.style.cssText = 'min-height:2.6em;text-align:center;font-size:0.85em;opacity:0.9;line-height:1.5;';
-  log.textContent = `${mob.name} приближается!`;
-  mid.appendChild(log);
+  mid.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:0.7em;width:64%;';
+  const teleLabel = document.createElement('div');
+  teleLabel.textContent = 'ТОЧНЫЙ УДАР — ЖМИ В ЗЕЛЁНОЙ ЗОНЕ';
+  teleLabel.style.cssText = `font-size:0.62em;letter-spacing:4px;color:#5f7a8a;
+    opacity:0;transition:opacity .15s;`;
+  mid.appendChild(teleLabel);
   const teleWrap = document.createElement('div');
-  teleWrap.style.cssText = `width:100%;height:0.8em;border-radius:1em;background:rgba(255,255,255,0.08);
-    overflow:hidden;opacity:0;transition:opacity .15s;position:relative;`;
+  teleWrap.style.cssText = `width:100%;height:0.55em;background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.08);overflow:hidden;opacity:0;transition:opacity .15s;
+    position:relative;box-sizing:border-box;`;
   const teleFill = document.createElement('div');
-  teleFill.style.cssText = 'height:100%;width:100%;background:#e5c07b;border-radius:1em;';
+  teleFill.style.cssText = 'height:100%;width:100%;background:#8a949e;';
   teleWrap.appendChild(teleFill);
   const zoneMark = document.createElement('div');
-  zoneMark.style.cssText = `position:absolute;top:0;bottom:0;left:0;background:rgba(152,195,121,0.25);
+  zoneMark.style.cssText = `position:absolute;top:0;bottom:0;left:0;background:rgba(152,195,121,0.3);
     border-right:2px solid #98c379;`;
   teleWrap.appendChild(zoneMark);
   mid.appendChild(teleWrap);
   layer.appendChild(mid);
 
-  // — игрок: полосы + кнопки —
+  // — низ: полосы игрока + плитки действий —
   const bottom = document.createElement('div');
-  bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:0.7em;width:70%;';
+  bottom.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:1em;width:76%;';
   const heroBars = document.createElement('div');
-  heroBars.style.cssText = 'display:flex;gap:1.5em;align-items:center;';
-  const hpBar = bar('#98c379', '11em', 'HP');
+  heroBars.style.cssText = 'display:flex;gap:2em;align-items:center;';
+  const hpBar = bar('#e06c75', '11em', 'HP');
   const focBar = bar('#7db8f0', '11em', 'FOC');
   heroBars.append(hpBar.wrap, focBar.wrap);
   bottom.appendChild(heroBars);
 
   const buttons = document.createElement('div');
-  buttons.style.cssText = 'display:flex;gap:0.8em;';
-  const btnAttack = combatBtn('⚔ Атака', '#e6edf3');
-  const btnSpec = combatBtn(`✦ Спецудар (${SPEC_COST})`, '#b39cf0');
-  const btnDodge = combatBtn('➟ Уклон', '#98c379');
-  const btnParry = combatBtn('🛡 Парировать', '#e5c07b');
+  buttons.style.cssText = 'display:flex;gap:0.7em;justify-content:center;width:100%;';
+  const btnAttack = combatBtn('⚔', 'АТАКА', '#4fd1c5');
+  const btnSpec = combatBtn('✦', `ФОКУС-УДАР · ${SPEC_COST}`, '#7db8f0');
+  const btnDodge = combatBtn('➟', 'УКЛОН', '#98c379');
+  const btnParry = combatBtn('◈', 'ПАРИРОВАНИЕ', '#e5c07b');
   buttons.append(btnAttack, btnSpec, btnDodge, btnParry);
   bottom.appendChild(buttons);
   layer.appendChild(bottom);
 
   function bar(color: string, width: string, label?: string) {
     const wrap = document.createElement('div');
-    wrap.style.cssText = 'display:flex;align-items:center;gap:0.4em;';
+    wrap.style.cssText = 'display:flex;align-items:center;gap:0.5em;';
     if (label) {
       const l = document.createElement('span');
       l.textContent = label;
-      l.style.cssText = 'font-size:0.6em;opacity:0.6;letter-spacing:1px;';
+      l.style.cssText = 'font-size:0.52em;color:#5f7a8a;letter-spacing:2px;';
       wrap.appendChild(l);
     }
     const outer = document.createElement('div');
-    outer.style.cssText = `width:${width};height:0.55em;border-radius:1em;
-      background:rgba(255,255,255,0.09);overflow:hidden;`;
+    outer.style.cssText = `width:${width};height:3px;background:rgba(255,255,255,0.09);overflow:hidden;`;
     const fill = document.createElement('div');
-    fill.style.cssText = `height:100%;width:100%;background:${color};border-radius:1em;transition:width .25s;`;
+    fill.style.cssText = `height:100%;width:100%;background:${color};transition:width .25s;`;
     outer.appendChild(fill);
     wrap.appendChild(outer);
     const text = document.createElement('span');
-    text.style.cssText = 'font-size:0.65em;opacity:0.75;min-width:4em;';
+    text.style.cssText = 'font-size:0.6em;color:#5f7a8a;min-width:4em;letter-spacing:1px;';
     wrap.appendChild(text);
     return { wrap, fill, text };
   }
 
-  function combatBtn(label: string, color: string): HTMLElement {
+  function combatBtn(glyph: string, label: string, color: string): HTMLElement {
     const b = document.createElement('div');
-    b.textContent = label;
-    b.style.cssText = `padding:0.55em 1.1em;border-radius:0.45em;border:1px solid ${color}55;
-      color:${color};background:rgba(12,18,24,0.9);cursor:pointer;user-select:none;
-      font-size:0.85em;transition:filter .12s,opacity .12s;`;
+    b.style.cssText = `display:flex;flex-direction:column;align-items:center;gap:0.4em;
+      padding:0.7em 1.4em;border:1px solid ${color}44;min-width:6.5em;
+      color:${color};background:rgba(255,255,255,0.015);cursor:pointer;user-select:none;
+      transition:border-color .12s,background .12s,opacity .12s;`;
+    const g = document.createElement('div');
+    g.textContent = glyph;
+    g.style.cssText = 'font-size:1em;';
+    const l = document.createElement('div');
+    l.textContent = label;
+    l.style.cssText = 'font-size:0.55em;letter-spacing:2.5px;white-space:nowrap;';
+    b.append(g, l);
+    b.onmouseenter = () => { b.style.borderColor = color; b.style.background = `${color}11`; };
+    b.onmouseleave = () => { b.style.borderColor = `${color}44`; b.style.background = 'rgba(255,255,255,0.015)'; };
     return b;
   }
 
@@ -178,6 +197,7 @@ export function runCombat(
     reactionSpent = false;
     telegraphStart = performance.now();
     teleWrap.style.opacity = '1';
+    teleLabel.style.opacity = '1';
     // окно реакции: шире с ловкостью
     const windowMs = Math.min(mob.telegraphMs, 350 + v('agi') * 15);
     zoneMark.style.width = `${(windowMs / mob.telegraphMs) * 100}%`;
@@ -247,6 +267,7 @@ export function runCombat(
   function endTelegraph() {
     cancelAnimationFrame(rafId);
     teleWrap.style.opacity = '0';
+    teleLabel.style.opacity = '0';
     phase = 'over';
     refresh();
   }
