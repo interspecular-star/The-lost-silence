@@ -319,6 +319,18 @@ export class Engine {
     });
   }
 
+  /** Текст с абзацами: двойной перенос строки даёт компактный отступ вместо целой пустой строки */
+  private setParagraphs(target: HTMLElement, text: string) {
+    target.textContent = '';
+    text.split(/\n{2,}/).forEach((para, i) => {
+      const p = document.createElement('div');
+      p.style.whiteSpace = 'pre-wrap';
+      if (i > 0) p.style.marginTop = '0.55em';
+      p.textContent = para;
+      target.appendChild(p);
+    });
+  }
+
   checkConditions(conds: Condition[] | undefined): boolean {
     if (!conds || conds.length === 0) return true;
     return conds.every((c) => {
@@ -573,7 +585,7 @@ export class Engine {
     switch (el.type) {
       case 'text':
         common();
-        d.textContent = this.interpolate(el.text ?? '');
+        this.setParagraphs(d, this.interpolate(el.text ?? ''));
         break;
       case 'rect':
         common();
@@ -879,8 +891,8 @@ export class Engine {
       box.appendChild(sp);
     }
     const txt = document.createElement('div');
-    txt.style.cssText = 'white-space:pre-wrap;line-height:1.42;';
-    txt.textContent = this.interpolate(n.text ?? '');
+    txt.style.cssText = 'line-height:1.42;';
+    this.setParagraphs(txt, this.interpolate(n.text ?? ''));
     box.appendChild(txt);
 
     const hint = document.createElement('div');
