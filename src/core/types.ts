@@ -262,12 +262,23 @@ export interface MobDef {
 
 // ---------- Задания ----------
 export type QuestKind = 'daily' | 'weekly' | 'story';
+
+// Этап цепочки: выполняется, когда верны все условия. Прогресс необратим
+// (выполненный этап не «развыполняется») и хранится в сейве игрока.
+export interface QuestStep {
+  id: string;
+  text: string;              // «Поговорить с Рен в ангаре»
+  conditions: Condition[];
+}
+
 export interface QuestDef {
   id: string;
   title: string;
   description?: string;
   kind: QuestKind;           // daily/weekly можно забирать раз в сутки/неделю, story — один раз
   conditions: Condition[];   // условия выполнения (все должны быть верны)
+  steps?: QuestStep[];       // цепочка этапов (по порядку); если заданы — задание выполнено,
+                             // когда пройдены все этапы (+ conditions, если есть)
   rewardEffects?: Effect[];
   rewardItems?: ItemGrant[];
   enabled: boolean;
@@ -311,6 +322,7 @@ export interface PlaytestCheckpoint {
   equip?: Partial<Record<ItemSlot, string>>;
   claims?: Record<string, string>;          // забранные награды заданий
   ups?: Record<string, number>;             // уровни улучшений
+  qsteps?: Record<string, number>;          // прогресс цепочек заданий (id → пройдено этапов)
 }
 
 // ---------- Idle-правила (пассивный прогресс) ----------

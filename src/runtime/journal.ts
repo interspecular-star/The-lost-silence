@@ -130,6 +130,37 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
         d.style.cssText = 'font-size:0.78em;color:#8fa2af;margin-top:0.25em;font-weight:300;';
         info.appendChild(d);
       }
+      // цепочка этапов: пройденные ✓, текущий ▸, будущие затемнены
+      const steps = q.steps ?? [];
+      const stepsDone = steps.length ? Math.min(engine.questSteps[q.id] ?? 0, steps.length) : 0;
+      if (steps.length) {
+        const list = document.createElement('div');
+        list.style.cssText = 'margin-top:0.5em;display:flex;flex-direction:column;gap:0.2em;';
+        steps.forEach((s, i) => {
+          const row = document.createElement('div');
+          row.style.cssText = 'font-size:0.74em;font-weight:300;display:flex;gap:0.6em;align-items:baseline;';
+          const mark = document.createElement('span');
+          if (i < stepsDone) {
+            mark.textContent = '✓';
+            mark.style.color = '#98c379';
+            row.style.color = '#5f7a8a';
+            row.style.textDecoration = 'line-through';
+            row.style.textDecorationColor = 'rgba(255,255,255,0.25)';
+          } else if (i === stepsDone) {
+            mark.textContent = '▸';
+            mark.style.color = kindColor[q.kind];
+            row.style.color = '#cfd9e2';
+          } else {
+            mark.textContent = '·';
+            row.style.color = '#3d4a56';
+          }
+          const t = document.createElement('span');
+          t.textContent = s.text;
+          row.append(mark, t);
+          list.appendChild(row);
+        });
+        info.appendChild(list);
+      }
       const reward = rewardLabel(q.rewardEffects, q.rewardItems);
       if (reward) {
         const r = document.createElement('div');
@@ -141,7 +172,7 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
 
       const key = resetKey(q.kind);
       const claimedKey = engine.questClaims[q.id];
-      const done = engine.checkConditions(q.conditions);
+      const done = (steps.length === 0 || stepsDone >= steps.length) && engine.checkConditions(q.conditions);
       if (claimedKey === key) {
         const b = btn(q.kind === 'story' ? 'Выполнено' : q.kind === 'daily' ? 'Завтра снова' : 'На след. неделе');
         dim(b);

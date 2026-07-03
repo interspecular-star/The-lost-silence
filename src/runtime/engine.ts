@@ -38,6 +38,7 @@ interface SaveData {
   equip?: Partial<Record<ItemSlot, string>>;
   claims?: Record<string, string>;          // задания: id → ключ сброса
   ups?: Record<string, number>;             // улучшения: id → уровень
+  qsteps?: Record<string, number>;          // цепочки заданий: id → пройдено этапов
   decode?: { defId: string; startedAt: number } | null;
 }
 
@@ -64,6 +65,7 @@ export class Engine {
 
   // журнал: задания / улучшения / расшифровка
   questClaims: Record<string, string> = {};
+  questSteps: Record<string, number> = {};   // id задания → пройдено этапов цепочки
   upgradeLevels: Record<string, number> = {};
   activeDecode: { defId: string; startedAt: number } | null = null;
   private currentScene: Scene | null = null;
@@ -145,6 +147,7 @@ export class Engine {
         this.inventory = save.inv ?? [];
         this.equipment = save.equip ?? {};
         this.questClaims = save.claims ?? {};
+        this.questSteps = save.qsteps ?? {};
         this.upgradeLevels = save.ups ?? {};
         this.activeDecode = save.decode ?? null;
         if (save.sceneId && this.project.scenes.some((s) => s.id === save.sceneId)) {
@@ -164,6 +167,7 @@ export class Engine {
       this.inventory = deepClone(cp.inv ?? []);
       this.equipment = { ...(cp.equip ?? {}) };
       this.questClaims = { ...(cp.claims ?? {}) };
+      this.questSteps = { ...(cp.qsteps ?? {}) };
       this.upgradeLevels = { ...(cp.ups ?? {}) };
       if (cp.sceneId && this.project.scenes.some((s) => s.id === cp.sceneId)) startId = cp.sceneId;
     }
@@ -177,6 +181,7 @@ export class Engine {
     this.recomputeDerived();
 
     if (startId) this.gotoScene(startId);
+    this.checkQuestSteps(true); // тривиально выполненные этапы фиксируем без уведомлений
     this.opts.onVarsChanged?.(this.state);
     this.startIdleTicks();
   }
@@ -196,6 +201,7 @@ export class Engine {
       equip: { ...this.equipment },
       claims: { ...this.questClaims },
       ups: { ...this.upgradeLevels },
+      qsteps: { ...this.questSteps },
     };
   }
 
@@ -234,11 +240,13 @@ export class Engine {
   // ---------- idle-системы ----------
   private startIdleTicks() {
     const rules = this.project.idleRules?.filter((r) => r.enabled) ?? [];
-    if (rules.length === 0 && !this.heroEnabled) return;
+    const hasChains = (this.project.quests ?? []).some((q) => q.enabled && q.steps?.length);
+    if (rules.length === 0 && !this.heroEnabled && !hasChains) return;
     this.tickTimer = window.setInterval(() => {
       if (this.destroyed) return;
       this.applyIdle(1 / 60, false); // тик раз в секунду
       this.regenTick();
+      this.checkQuestSteps();
     }, 1000);
   }
 
@@ -338,6 +346,7 @@ export class Engine {
           equip: this.equipment,
           claims: this.questClaims,
           ups: this.upgradeLevels,
+          qsteps: this.questSteps,
           decode: this.activeDecode,
         };
         localStorage.setItem(this.saveKey(), JSON.stringify(data));
@@ -408,9 +417,37 @@ export class Engine {
     }
     this.checkLevelUp();
     this.recomputeDerived();
+    this.checkQuestSteps();
     this.opts.onVarsChanged?.(this.state);
     this.renderScene(); // условная видимость элементов могла измениться
     this.scheduleSave();
+  }
+
+  /** Продвигает цепочки заданий: выполненный этап фиксируется навсегда.
+   *  silent — без уведомлений (первичная инициализация при старте). */
+  checkQuestSteps(silent = false) {
+    for (const q of this.project.quests ?? []) {
+      const steps = q.steps;
+      if (!q.enabled || !steps?.length) continue;
+      if (this.questClaims[q.id]) continue; // награда уже забрана
+      let done = this.questSteps[q.id] ?? 0;
+      let advanced = false;
+      while (done < steps.length && this.checkConditions(steps[done].conditions)) {
+        done++;
+        advanced = true;
+        if (!silent) {
+          if (done < steps.length) {
+            this.notify(`📋 ${q.title}: ${steps[done - 1].text} ✓`, '#7db8f0');
+          } else {
+            this.notify(`📋 «${q.title}» выполнено — награда в журнале`, '#e5c07b');
+          }
+        }
+      }
+      if (advanced) {
+        this.questSteps[q.id] = done;
+        this.scheduleSave();
+      }
+    }
   }
 
   // ---------- сцены ----------
@@ -891,6 +928,7 @@ export class Engine {
       if (this.state[npc.metVarId] !== true) {
         this.state[npc.metVarId] = true;
         materializeFactionReps(this.project, this.state);
+        this.checkQuestSteps();
         this.opts.onVarsChanged?.(this.state);
         this.scheduleSave();
       }

@@ -247,7 +247,16 @@ export function validateProject(p: Project): Issue[] {
     checkConds(q.conditions, `Задание «${q.title}»`, goQuests);
     checkEffects(q.rewardEffects, `Задание «${q.title}» (награда)`, goQuests);
     checkItems(q.rewardItems, `Задание «${q.title}» (награда)`, goQuests);
-    if (q.enabled && q.conditions.length === 0) {
+    for (const s of q.steps ?? []) {
+      checkConds(s.conditions, `Задание «${q.title}» → этап «${s.text.slice(0, 30)}»`, goQuests);
+      if (s.conditions.length === 0) {
+        warn(`Задание «${q.title}» → этап «${s.text.slice(0, 30)}»`, 'этап без условий — выполнится мгновенно', goQuests);
+      }
+    }
+    if (q.steps?.length && q.kind !== 'story') {
+      warn(`Задание «${q.title}»`, 'цепочка этапов у суточного/недельного: этапы не сбрасываются — лучше сделать сюжетным', goQuests);
+    }
+    if (q.enabled && q.conditions.length === 0 && !q.steps?.length) {
       warn(`Задание «${q.title}»`, 'нет условий — награду можно забрать сразу', goQuests);
     }
   }

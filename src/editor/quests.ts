@@ -4,7 +4,7 @@
 
 import { Store } from '../core/store';
 import {
-  QuestDef, UpgradeDef, DecodeDef, Condition, Effect, ItemGrant, uid,
+  QuestDef, QuestStep, Condition, Effect, ItemGrant, uid,
 } from '../core/types';
 import {
   h, textInput, numberInput, selectInput, textArea, checkbox,
@@ -151,6 +151,42 @@ export function mountQuests(store: Store): HTMLElement {
     return wrap;
   }
 
+  function stepsMini(q: QuestDef): HTMLElement {
+    const wrap = h('div', { style: 'display:flex;flex-direction:column;gap:6px;' });
+    const steps = q.steps ?? [];
+    steps.forEach((s: QuestStep, i: number) => {
+      const box = h('div', {
+        style: 'border:1px solid var(--border);border-radius:6px;padding:6px 8px;display:flex;flex-direction:column;gap:4px;',
+      });
+      const r = h('div', { style: 'display:flex;gap:4px;align-items:center;' });
+      r.appendChild(h('span', { style: 'color:var(--text-faint);font-size:11px;flex:0 0 auto;', text: `${i + 1}.` }));
+      const txt = textInput(s.text, (v) => mutate(() => { s.text = v; }));
+      txt.placeholder = 'Что сделать (видно игроку): «Поговорить с Рен»';
+      r.appendChild(txt);
+      if (i > 0) {
+        const up = h('button', { class: 'btn small', text: '↑', title: 'Выше' });
+        up.onclick = () => mutate(() => { [steps[i - 1], steps[i]] = [steps[i], steps[i - 1]]; });
+        r.appendChild(up);
+      }
+      const del = h('button', { class: 'btn small danger-ghost', text: '✕' });
+      del.onclick = () => mutate(() => {
+        steps.splice(i, 1);
+        if (steps.length === 0) q.steps = undefined;
+      });
+      r.appendChild(del);
+      box.appendChild(r);
+      box.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Этап выполнен, когда:' }));
+      box.appendChild(condsMini(s.conditions, (l) => mutate(() => { s.conditions = l; })));
+      wrap.appendChild(box);
+    });
+    const add = h('button', { class: 'btn small', text: '+ этап', style: 'align-self:flex-start;' });
+    add.onclick = () => mutate(() => {
+      (q.steps ??= []).push({ id: uid('qs'), text: 'Новый этап', conditions: [] });
+    });
+    wrap.appendChild(add);
+    return wrap;
+  }
+
   function cardShell(borderColor: string): HTMLElement {
     return h('div', {
       style: `background:var(--bg-panel);border:1px solid ${borderColor};
@@ -209,7 +245,9 @@ export function mountQuests(store: Store): HTMLElement {
       const desc = textArea(q.description ?? '', (v) => mutate(() => { q.description = v || undefined; }), 2);
       desc.placeholder = 'Описание для игрока…';
       c.appendChild(desc);
-      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Условия выполнения:' }));
+      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Этапы цепочки (по порядку; выполненный этап фиксируется навсегда — для сюжетных):' }));
+      c.appendChild(stepsMini(q));
+      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: q.steps?.length ? 'Доп. условия (поверх этапов, обычно не нужны):' : 'Условия выполнения:' }));
       c.appendChild(condsMini(q.conditions, (l) => mutate(() => { q.conditions = l; })));
       c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Награда — эффекты:' }));
       c.appendChild(effectsMini(q.rewardEffects ?? [], (l) => mutate(() => { q.rewardEffects = l.length ? l : undefined; })));

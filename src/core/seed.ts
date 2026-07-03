@@ -195,8 +195,12 @@ export function seedProject(): Project {
   project.quests = [
     {
       id: uid('q'), title: 'Наладить связи', kind: 'story',
-      description: 'Познакомьтесь с техником Рен в ангаре — Матису нужен второй голос за вас, чтобы откалибровать Осколок.',
-      conditions: [{ varId: ren.metVarId, op: 'eq', value: true }, { varId: vOskolok, op: 'gte', value: 1 }],
+      description: 'Матису нужен второй голос за вас, чтобы откалибровать Осколок.',
+      conditions: [],
+      steps: [
+        { id: uid('qs'), text: 'Получить Осколок от Матиса в ангаре', conditions: [{ varId: vOskolok, op: 'gte', value: 1 }] },
+        { id: uid('qs'), text: 'Познакомиться с техником Рен', conditions: [{ varId: ren.metVarId, op: 'eq', value: true }] },
+      ],
       rewardEffects: [{ varId: vOskolok, op: 'set', value: 2 }],
       enabled: true,
     },
