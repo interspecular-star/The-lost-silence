@@ -7,6 +7,7 @@ import { saveProjectFile, openProjectFile, exportGame } from '../core/storage';
 import { seedProject } from '../core/seed';
 import { h, toast, confirmModal } from './ui';
 import { openPreview } from './preview';
+import { openValidator } from './validate';
 
 export function mountTopbar(root: HTMLElement, store: Store) {
   const render = () => {
@@ -101,7 +102,10 @@ export function mountTopbar(root: HTMLElement, store: Store) {
 
     root.appendChild(h('div', { class: 'tb-sep' }));
 
-    // предпросмотр и экспорт
+    // проверка, предпросмотр и экспорт
+    const checkBtn = h('button', { class: 'tb-btn', text: '✓ Проверка', title: 'Найти битые ссылки, висячие ноды и опечатки' });
+    checkBtn.onclick = () => openValidator(store);
+    root.appendChild(checkBtn);
     const playBtn = h('button', { class: 'tb-btn primary', text: '▶ Играть', title: 'Предпросмотр игры (F5)' });
     playBtn.onclick = () => openPreview(store);
     const exportBtn = h('button', { class: 'tb-btn', text: '⤓ Экспорт игры', title: 'Собрать один HTML-файл игры' });

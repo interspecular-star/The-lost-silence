@@ -288,6 +288,20 @@ export interface DecodeDef {
   enabled: boolean;
 }
 
+// ---------- Чекпоинты плейтеста ----------
+// Снимок состояния игры для предпросмотра: «начать как будто я уже дошёл досюда».
+// Сохраняется владельцем прямо из предпросмотра; в экспортированную игру не попадает влиянием.
+export interface PlaytestCheckpoint {
+  id: string;
+  name: string;
+  sceneId: string | null;
+  vars: Record<string, VarValue>;          // по id переменных (кроме computed)
+  inv?: ItemGrant[];                        // инвентарь (itemId + qty)
+  equip?: Partial<Record<ItemSlot, string>>;
+  claims?: Record<string, string>;          // забранные награды заданий
+  ups?: Record<string, number>;             // уровни улучшений
+}
+
 // ---------- Idle-правила (пассивный прогресс) ----------
 export interface IdleRule {
   id: string;
@@ -332,6 +346,7 @@ export interface Project {
   quests?: QuestDef[];
   upgrades?: UpgradeDef[];
   decodes?: DecodeDef[];
+  playtests?: PlaytestCheckpoint[];
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;
   // имя переменной валюты для правого края HUD (по умолчанию 'credits')

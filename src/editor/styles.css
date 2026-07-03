@@ -398,6 +398,23 @@ input.ed[type='number'] { font-family: var(--mono); }
 .modal h3 { margin: 0 0 12px; font-size: 14px; }
 .modal .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
+/* ---------- Валидатор ---------- */
+.modal.validator { max-width: 680px; width: 680px; display: flex; flex-direction: column; max-height: 80vh; }
+.vld-list { overflow-y: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 6px; }
+.vld-row {
+  display: flex; gap: 10px; padding: 8px 12px; cursor: pointer;
+  border-bottom: 1px solid var(--border); align-items: baseline;
+}
+.vld-row:last-child { border-bottom: none; }
+.vld-row:hover { background: rgba(79, 209, 197, 0.06); }
+.vld-row.static { cursor: default; }
+.vld-row.static:hover { background: transparent; }
+.vld-row .vld-icon { flex: 0 0 auto; font-size: 12px; }
+.vld-row.error .vld-icon { color: var(--danger); }
+.vld-row.warn .vld-icon { color: var(--warn); }
+.vld-row .vld-where { font-size: 11px; color: var(--text-faint); }
+.vld-row .vld-msg { font-size: 12.5px; color: var(--text); }
+
 /* ---------- Прокрутка ---------- */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: transparent; }

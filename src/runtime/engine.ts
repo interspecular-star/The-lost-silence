@@ -8,6 +8,7 @@ import {
   Project, Scene, SceneElement, Dialogue, DialogueNode,
   Condition, Effect, VarValue, CANVAS_W, CANVAS_H,
   ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, RARITY_META, STAT_LABELS,
+  PlaytestCheckpoint, uid, deepClone,
 } from '../core/types';
 import { materializeFactionReps, computeFactionRep, npcPortrait } from '../core/npc';
 import {
@@ -23,6 +24,10 @@ export interface EngineOptions {
   onSceneChanged?: (scene: Scene) => void;
   /** Сохранять прогресс игрока (localStorage) и считать оффлайн-прогресс. Для предпросмотра — false. */
   persist?: boolean;
+  /** Плейтест: начать игру с этого чекпоинта (переменные, инвентарь, сцена) */
+  checkpoint?: PlaytestCheckpoint | null;
+  /** Плейтест: начать с этой сцены (приоритетнее сцены чекпоинта) */
+  startSceneId?: string | null;
 }
 
 interface SaveData {
@@ -149,6 +154,22 @@ export class Engine {
         this.applyIdle(offlineMin, true);
       }
     }
+    // плейтест-чекпоинт (только предпросмотр): применяем поверх начальных значений
+    const cp = this.opts.checkpoint;
+    if (cp) {
+      restored = true;
+      for (const v of this.project.variables) {
+        if (v.category !== 'computed' && cp.vars[v.id] !== undefined) this.state[v.id] = cp.vars[v.id];
+      }
+      this.inventory = deepClone(cp.inv ?? []);
+      this.equipment = { ...(cp.equip ?? {}) };
+      this.questClaims = { ...(cp.claims ?? {}) };
+      this.upgradeLevels = { ...(cp.ups ?? {}) };
+      if (cp.sceneId && this.project.scenes.some((s) => s.id === cp.sceneId)) startId = cp.sceneId;
+    }
+    if (this.opts.startSceneId && this.project.scenes.some((s) => s.id === this.opts.startSceneId)) {
+      startId = this.opts.startSceneId;
+    }
     // стартовый инвентарь — только для новой игры
     if (!restored && this.project.hero?.startItems?.length) {
       this.giveItems(this.project.hero.startItems, true);
@@ -158,6 +179,24 @@ export class Engine {
     if (startId) this.gotoScene(startId);
     this.opts.onVarsChanged?.(this.state);
     this.startIdleTicks();
+  }
+
+  /** Снимок текущего состояния игры как чекпоинт плейтеста */
+  capturePlaytest(name: string): PlaytestCheckpoint {
+    const vars: Record<string, VarValue> = {};
+    for (const v of this.project.variables) {
+      if (v.category !== 'computed') vars[v.id] = this.state[v.id];
+    }
+    return {
+      id: uid('cp'),
+      name,
+      sceneId: this.currentScene?.id ?? null,
+      vars,
+      inv: deepClone(this.inventory),
+      equip: { ...this.equipment },
+      claims: { ...this.questClaims },
+      ups: { ...this.upgradeLevels },
+    };
   }
 
   /** Останавливает таймеры (вызывать при закрытии предпросмотра) */
