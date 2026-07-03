@@ -42,17 +42,9 @@ export function runCombat(
     color:#cfd9e2;padding:3.5% 7%;`;
   engine.root.appendChild(layer);
 
-  // — верх: лог слева (курсив) + моб справа —
-  const top = document.createElement('div');
-  top.style.cssText = 'display:flex;width:100%;gap:2em;align-items:flex-start;';
-  const log = document.createElement('div');
-  log.style.cssText = `flex:1;font-style:italic;font-weight:300;color:#8fa2af;
-    font-size:0.9em;line-height:1.6;padding-top:1.5em;`;
-  log.textContent = `«${mob.name} приближается».`;
-  top.appendChild(log);
-
+  // — верх: моб по центру —
   const mobBox = document.createElement('div');
-  mobBox.style.cssText = 'flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:0.6em;';
+  mobBox.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:0.7em;';
   const mobName = document.createElement('div');
   mobName.textContent = mob.name.toUpperCase();
   mobName.style.cssText = 'font-size:0.85em;font-weight:400;color:#e6edf3;letter-spacing:5px;';
@@ -61,16 +53,20 @@ export function runCombat(
   mobBox.appendChild(mobHpBar.wrap);
   const mobImg = document.createElement('img');
   mobImg.src = mobIcon(mob);
-  mobImg.style.cssText = `width:7em;height:7em;border:1px solid rgba(255,255,255,0.1);
-    padding:0.4em;box-sizing:border-box;`;
+  mobImg.style.cssText = `width:6.5em;height:6.5em;border:1px solid rgba(255,255,255,0.1);
+    padding:0.4em;box-sizing:border-box;margin-top:0.3em;`;
   mobImg.draggable = false;
   mobBox.appendChild(mobImg);
-  top.appendChild(mobBox);
-  layer.appendChild(top);
+  layer.appendChild(mobBox);
 
-  // — центр: подпись + полоса замаха —
+  // — центр: лог + подпись + полоса замаха —
   const mid = document.createElement('div');
   mid.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:0.7em;width:64%;';
+  const log = document.createElement('div');
+  log.style.cssText = `font-style:italic;font-weight:300;color:#8fa2af;text-align:center;
+    font-size:0.9em;line-height:1.5;min-height:2.4em;`;
+  log.textContent = `«${mob.name} приближается».`;
+  mid.appendChild(log);
   const teleLabel = document.createElement('div');
   teleLabel.textContent = 'ТОЧНЫЙ УДАР — ЖМИ В ЗЕЛЁНОЙ ЗОНЕ';
   teleLabel.style.cssText = `font-size:0.62em;letter-spacing:4px;color:#5f7a8a;

@@ -223,7 +223,7 @@ export function seedProject(): Project {
   // ============================================================
   // СЦЕНЫ
   // ============================================================
-  const narrStyle = { textColor: '#aebfca', fontSize: 34, fontWeight: '300', textAlign: 'center' as const, lineHeight: 1.6 };
+  const narrStyle = { textColor: '#aebfca', fontSize: 34, fontWeight: '300', textAlign: 'center' as const, lineHeight: 1.38 };
   // «тихие строки» — действия без коробок, только тонкая линия и разрядка
   const btnStyle = {
     fill: 'transparent', textColor: '#8fa2af', fontSize: 25, radius: 0,
@@ -327,7 +327,7 @@ export function seedProject(): Project {
         },
         {
           id: uid('el'), name: 'Кнопка «Всмотреться»', type: 'button',
-          x: 760, y: 700, w: 400, h: 76,
+          x: 760, y: 620, w: 400, h: 70,
           text: 'Всмотреться в силуэт',
           style: btnStyle,
           action: { type: 'startDialogue', dialogueId: dIntro },
@@ -379,7 +379,7 @@ export function seedProject(): Project {
         },
         {
           id: uid('el'), name: 'Выход (после боя)', type: 'button',
-          x: 710, y: 700, w: 500, h: 76,
+          x: 710, y: 620, w: 500, h: 70,
           text: '➜ Подняться к разлому',
           style: { ...btnStyle, textColor: '#4fd1c5', borderColor: 'rgba(79,209,197,0.4)' },
           action: { type: 'gotoScene', sceneId: sSurface },
@@ -404,7 +404,7 @@ export function seedProject(): Project {
         },
         {
           id: uid('el'), name: 'В лагерь', type: 'button',
-          x: 710, y: 720, w: 500, h: 76,
+          x: 710, y: 660, w: 500, h: 70,
           text: '➜ Спуститься в лагерь кочевников',
           style: btnStyle,
           action: { type: 'gotoScene', sceneId: sHangar },
@@ -444,9 +444,9 @@ export function seedProject(): Project {
         },
         {
           id: uid('el'), name: 'Подсказка-журнал', type: 'text',
-          x: 460, y: 700, w: 1000, h: 120,
+          x: 460, y: 640, w: 1000, h: 120,
           text: 'Демо-версия интро завершается здесь.\nЗагляните в Журнал 📋 — там задания, улучшения дронов и расшифровка OldNet.\nКонтракты Flux Nomads уже капают кредитами — даже пока игра закрыта.',
-          style: { textColor: '#5f7a8a', fontSize: 24, fontWeight: '300', textAlign: 'center', lineHeight: 1.6 },
+          style: { textColor: '#5f7a8a', fontSize: 24, fontWeight: '300', textAlign: 'center', lineHeight: 1.4 },
           visibleIf: [{ varId: vOskolok, op: 'gte', value: 2 }],
         },
       ],

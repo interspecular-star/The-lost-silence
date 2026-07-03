@@ -135,18 +135,23 @@ export function materializeFactionReps(project: Project, state: Record<string, V
 
 // ---------- портреты-плейсхолдеры ----------
 
-/** SVG-силуэт с инициалами в цвете фракции → data-URI */
+/** Круглый SVG-силуэт с инициалами в цвете фракции → data-URI */
 export function placeholderPortrait(name: string, color: string): string {
   const initials = name.trim().split(/\s+/).map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase() || '?';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
-<defs><radialGradient id="g" cx="50%" cy="38%" r="70%">
-<stop offset="0%" stop-color="#26303a"/><stop offset="100%" stop-color="#12181f"/>
-</radialGradient></defs>
-<rect width="96" height="96" rx="12" fill="url(#g)"/>
-<rect width="96" height="96" rx="12" fill="none" stroke="${color}" stroke-opacity="0.85" stroke-width="2.5"/>
-<circle cx="48" cy="37" r="15" fill="#3a4754"/>
-<path d="M20 84 Q23 58 48 58 Q73 58 76 84 Z" fill="#3a4754"/>
-<text x="48" y="88" font-family="Segoe UI, sans-serif" font-size="15" font-weight="600"
+<defs>
+<radialGradient id="g" cx="50%" cy="38%" r="70%">
+<stop offset="0%" stop-color="#232d37"/><stop offset="100%" stop-color="#0e141a"/>
+</radialGradient>
+<clipPath id="c"><circle cx="48" cy="48" r="46"/></clipPath>
+</defs>
+<circle cx="48" cy="48" r="46" fill="url(#g)"/>
+<g clip-path="url(#c)">
+<circle cx="48" cy="38" r="14" fill="#39434e"/>
+<path d="M18 96 Q22 60 48 60 Q74 60 78 96 Z" fill="#39434e"/>
+</g>
+<circle cx="48" cy="48" r="45" fill="none" stroke="${color}" stroke-opacity="0.75" stroke-width="2"/>
+<text x="48" y="90" font-family="Segoe UI, sans-serif" font-size="13" font-weight="600"
  fill="${color}" text-anchor="middle" letter-spacing="1">${initials}</text>
 </svg>`;
   return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);

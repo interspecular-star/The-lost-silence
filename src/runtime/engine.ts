@@ -55,6 +55,7 @@ export class Engine {
   private notices: HTMLElement[] = [];
   /** true во время боя — реген приостановлен */
   inCombat = false;
+  private dialogueActive = false;
 
   // журнал: задания / улучшения / расшифровка
   questClaims: Record<string, string> = {};
@@ -610,7 +611,12 @@ export class Engine {
 
     if (el.action && el.action.type !== 'none') {
       d.style.cursor = 'pointer';
+      d.dataset.action = '1';
       d.addEventListener('click', () => this.runAction(el));
+      if (this.dialogueActive) {
+        d.style.opacity = '0.12';
+        d.style.pointerEvents = 'none';
+      }
     }
     return d;
   }
@@ -705,21 +711,38 @@ export class Engine {
     this.renderHUD();
   }
 
-  /** Всплывающее уведомление в игре */
+  /** Всплывающее уведомление — тихая строка сверху справа, под HUD */
   notify(text: string, color = '#cfd9e2') {
     const n = document.createElement('div');
     n.textContent = text;
-    n.style.cssText = `position:absolute;right:2%;bottom:${6 + this.notices.length * 7}%;
-      background:rgba(8,13,18,0.92);border:1px solid ${color}66;color:${color};
-      padding:0.4em 0.9em;border-radius:0.4em;font-size:calc(24 * 100cqw / ${CANVAS_W});
-      pointer-events:none;transition:opacity .4s;z-index:50;`;
+    n.style.cssText = `position:absolute;right:2%;
+      background:rgba(5,9,13,0.88);border-left:2px solid ${color};color:${color};
+      padding:0.45em 1em 0.45em 0.9em;font-size:calc(22 * 100cqw / ${CANVAS_W});
+      letter-spacing:1px;pointer-events:none;z-index:50;backdrop-filter:blur(4px);
+      opacity:0;transform:translateX(0.8em);
+      transition:opacity .3s ease,transform .3s ease,top .3s ease;`;
     this.hudLayer.appendChild(n);
     this.notices.push(n);
-    setTimeout(() => { n.style.opacity = '0'; }, 2200);
+    this.layoutNotices();
+    requestAnimationFrame(() => {
+      n.style.opacity = '1';
+      n.style.transform = 'translateX(0)';
+    });
+    setTimeout(() => {
+      n.style.opacity = '0';
+      n.style.transform = 'translateX(0.8em)';
+    }, 2400);
     setTimeout(() => {
       n.remove();
       this.notices = this.notices.filter((x) => x !== n);
-    }, 2700);
+      this.layoutNotices();
+    }, 2800);
+  }
+
+  private layoutNotices() {
+    this.notices.forEach((n, i) => {
+      n.style.top = `calc(2.5% + 2.6em + ${i * 2.4}em)`;
+    });
   }
 
   // ---------- диалоги ----------
@@ -778,6 +801,8 @@ export class Engine {
   private endDialogue() {
     this.currentDialogue = null;
     this.dialogueLayer.innerHTML = '';
+    this.dialogueActive = false;
+    this.applySceneDim();
   }
 
   private makeBox(): HTMLElement {
@@ -787,10 +812,22 @@ export class Engine {
     box.style.cssText = `position:absolute;left:8%;right:8%;bottom:5%;
       background:${t.dialogueBox};color:${t.dialogueText};
       border:1px solid rgba(255,255,255,0.07);border-top:1px solid ${t.accent}22;
-      padding:2% 3.2%;pointer-events:auto;backdrop-filter:blur(8px);
-      font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.55;`;
+      padding:1.8% 3.2%;pointer-events:auto;backdrop-filter:blur(8px);
+      font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.42;`;
     this.dialogueLayer.appendChild(box);
+    // пока открыт диалог — действия сцены гаснут (конфликт слоёв снят)
+    this.dialogueActive = true;
+    this.applySceneDim();
     return box;
+  }
+
+  /** Затухание интерактивных элементов сцены во время диалога */
+  private applySceneDim() {
+    this.sceneLayer.querySelectorAll<HTMLElement>('[data-action]').forEach((el) => {
+      el.style.opacity = this.dialogueActive ? '0.12' : '';
+      el.style.pointerEvents = this.dialogueActive ? 'none' : '';
+      el.style.transition = 'opacity .3s';
+    });
   }
 
   private renderLine(n: DialogueNode) {
@@ -842,7 +879,7 @@ export class Engine {
       box.appendChild(sp);
     }
     const txt = document.createElement('div');
-    txt.style.whiteSpace = 'pre-wrap';
+    txt.style.cssText = 'white-space:pre-wrap;line-height:1.42;';
     txt.textContent = this.interpolate(n.text ?? '');
     box.appendChild(txt);
 
