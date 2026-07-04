@@ -427,6 +427,13 @@ input.ed[type='number'] { font-family: var(--mono); }
 .modal h3 { margin: 0 0 12px; font-size: 14px; }
 .modal .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 
+/* ---------- Черновик диалога ---------- */
+.modal.draft { max-width: 760px; width: 760px; display: flex; flex-direction: column; max-height: 84vh; }
+.modal.draft .draft-textarea {
+  flex: 1; min-height: 340px; margin-top: 10px; resize: vertical;
+  font-family: var(--mono); line-height: 1.5; white-space: pre-wrap;
+}
+
 /* ---------- Валидатор ---------- */
 .modal.validator { max-width: 680px; width: 680px; display: flex; flex-direction: column; max-height: 80vh; }
 .vld-list { overflow-y: auto; margin-top: 12px; border: 1px solid var(--border); border-radius: 6px; }

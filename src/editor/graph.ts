@@ -4,7 +4,7 @@
 
 import { Store } from '../core/store';
 import {
-  Dialogue, DialogueNode, NodeType, uid,
+  Dialogue, DialogueNode, NodeType, uid, deepClone,
   NODE_TYPE_LABELS, COND_OP_LABELS, EFFECT_OP_LABELS,
 } from '../core/types';
 import { h, toast } from './ui';
@@ -433,6 +433,21 @@ export class GraphView {
     if (!dlg.startNodeId) dlg.startNodeId = node.id;
     this.store.emit('change');
     this.store.selectNode(node.id);
+  }
+
+  duplicateSelectedNode() {
+    const dlg = this.store.currentDialogue;
+    const node = this.store.selectedNode;
+    if (!dlg || !node) return;
+    this.store.snapshot();
+    const copy: DialogueNode = deepClone(node);
+    copy.id = uid('nd');
+    copy.x = node.x + 32;
+    copy.y = node.y + 32;
+    copy.choices = copy.choices?.map((c) => ({ ...c, id: uid('ch') }));
+    dlg.nodes.push(copy);
+    this.store.emit('change');
+    this.store.selectNode(copy.id);
   }
 
   deleteSelectedNode() {

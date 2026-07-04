@@ -8,6 +8,7 @@ import {
   SCENE_KIND_LABELS, ELEMENT_TYPE_LABELS,
 } from '../core/types';
 import { h, promptModal, confirmModal, toast } from './ui';
+import { openDraftPanel } from './draft';
 
 const KIND_ICONS: Record<SceneKind, string> = { page: '▤', location: '◈', level: '⬢' };
 const COLLAPSE_KEY = 'tls_sidebar_collapsed_kinds';
@@ -357,6 +358,7 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       dlg.name = name;
       store.emit('change');
     });
+    mkItem('📝 Черновик', () => { openDraftPanel(store, dlg.id); });
     mkItem('⧉ Дублировать', () => {
       store.snapshot();
       const copy = deepClone(dlg);

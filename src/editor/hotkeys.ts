@@ -80,6 +80,10 @@ export function registerHotkeys(store: Store, stage: StageView, graph: GraphView
       if (e.key === 'Delete' || e.key === 'Backspace') {
         graph.deleteSelectedNode();
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault();
+        graph.duplicateSelectedNode();
+      }
     }
   });
 }
