@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Store } from '../core/store';
-import { NPC, Faction } from '../core/types';
+import { NPC, Faction, FactionSkinId, FACTION_SKIN_LABELS } from '../core/types';
 import {
   createNPC, createFaction, deleteNPC, renameNPC, npcPortrait,
 } from '../core/npc';
@@ -44,7 +44,7 @@ export function mountNPCs(store: Store): HTMLElement {
     const table = h('table', { class: 'vars-table' });
     if (factions.length > 0) {
       const thead = h('tr');
-      for (const t of ['Название', 'Цвет', 'Модель голосов', 'Переменная репутации', 'NPC', '']) {
+      for (const t of ['Название', 'Цвет', 'Скин диалога', 'Модель голосов', 'Переменная репутации', 'NPC', '']) {
         thead.appendChild(h('th', { text: t }));
       }
       table.appendChild(thead);
@@ -68,6 +68,10 @@ export function mountNPCs(store: Store): HTMLElement {
       color.onchange = () => mutate(() => { f.color = color.value; });
       colorWrap.appendChild(color);
       td(colorWrap, '8%');
+      td(selectInput(f.skinId ?? '', [
+        ['', '— как обычно —'],
+        ...Object.entries(FACTION_SKIN_LABELS).map(([k, label]) => [k, label] as [string, string]),
+      ], (v) => mutate(() => { f.skinId = (v || undefined) as FactionSkinId | undefined; })), '20%');
       td(selectInput(f.repMode, [
         ['weighted', 'иерархия (веса важны)'],
         ['equal', 'община (все равны)'],

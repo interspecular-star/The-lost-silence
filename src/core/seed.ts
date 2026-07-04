@@ -73,12 +73,18 @@ export function seedProject(): Project {
 
   // ---- фракции ----
   const fFlux = createFaction(project, 'Flux Nomads', '#4fd1c5');
+  fFlux.skinId = 'flux';
   const fSylv = createFaction(project, 'Sylvarium', '#98c379');
+  fSylv.skinId = 'sylvarium';
   const fWood = createFaction(project, 'Woodhaven', '#d19a66');
   fWood.repMode = 'equal';
+  fWood.skinId = 'woodhaven';
   const fCav = createFaction(project, 'Cavernium', '#b39cf0');
+  fCav.skinId = 'cavernium';
   const fAer = createFaction(project, 'Aeralis', '#7db8f0');
-  const fHyd = createFaction(project, 'Hydrosynth', '#56b6c2');
+  fAer.skinId = 'aeralis';
+  const fHyd = createFaction(project, 'Hydrosynth', '#2ec4d6');
+  fHyd.skinId = 'hydrosynth';
   void fSylv; void fCav; void fAer;
 
   // ---- герой и предметы ----

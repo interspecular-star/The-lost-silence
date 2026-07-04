@@ -11,6 +11,7 @@ import {
   PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule,
 } from '../core/types';
 import { ensureBgFxStyles } from './bgfx';
+import { ensureDialogueFxStyles } from './dialoguefx';
 import { materializeFactionReps, computeFactionRep, npcPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -96,8 +97,11 @@ export class Engine {
   activeDecode: { defId: string; startedAt: number } | null = null;
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
+  /** NPC последней показанной реплики — определяет фракционный скин диалогового блока */
+  private currentSpeakerNpcId: string | null = null;
   private tickTimer: number | undefined;
   private saveTimer: number | undefined;
+  private sceneTransitionTimer: number | undefined;
   private destroyed = false;
 
   constructor(project: Project, root: HTMLElement, opts: EngineOptions = {}) {
@@ -111,6 +115,7 @@ export class Engine {
     root.style.fontFamily = project.theme.font;
 
     ensureBgFxStyles();
+    ensureDialogueFxStyles();
     this.bgLayer = document.createElement('div');
     this.bgLayer.style.cssText = 'position:absolute;inset:0;';
     this.buildBgChain();
@@ -243,6 +248,7 @@ export class Engine {
     this.destroyed = true;
     clearInterval(this.tickTimer);
     clearTimeout(this.saveTimer);
+    clearTimeout(this.sceneTransitionTimer);
     this.root.removeEventListener('pointermove', this.onBgPointerMove);
   }
 
@@ -536,10 +542,11 @@ export class Engine {
   }
 
   /** Текст с абзацами: двойной перенос строки даёт компактный отступ вместо целой пустой строки */
-  private setParagraphs(target: HTMLElement, text: string) {
+  private setParagraphs(target: HTMLElement, text: string, cls?: string) {
     target.textContent = '';
     text.split(/\n{2,}/).forEach((para, i) => {
       const p = document.createElement('div');
+      if (cls) p.className = cls;
       p.style.whiteSpace = 'pre-wrap';
       if (i > 0) p.style.marginTop = '0.55em';
       p.textContent = para;
@@ -622,11 +629,33 @@ export class Engine {
   gotoScene(id: string, suppressEnter = false) {
     const scene = this.project.scenes.find((s) => s.id === id);
     if (!scene) return;
-    this.currentScene = scene;
-    this.renderScene();
-    this.opts.onSceneChanged?.(scene);
-    this.scheduleSave();
-    if (scene.onEnterDialogueId && !suppressEnter) this.startDialogue(scene.onEnterDialogueId);
+    const apply = () => {
+      this.currentScene = scene;
+      this.renderScene();
+      this.opts.onSceneChanged?.(scene);
+      this.scheduleSave();
+      if (scene.onEnterDialogueId && !suppressEnter) this.startDialogue(scene.onEnterDialogueId);
+    };
+    if (!this.currentScene || this.currentScene.id === scene.id) { apply(); return; }
+    this.transitionScene(apply);
+  }
+
+  /** Мягкий кросс-фейд между сценами: гасим фон+слои сцены, меняем содержимое, проявляем обратно */
+  private transitionScene(swap: () => void) {
+    const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const ms = reduced ? 0 : 220;
+    clearTimeout(this.sceneTransitionTimer);
+    this.bgLayer.style.transition = `opacity ${ms}ms ease`;
+    this.sceneLayer.style.transition = `opacity ${ms}ms ease`;
+    this.bgLayer.style.opacity = '0';
+    this.sceneLayer.style.opacity = '0';
+    this.sceneTransitionTimer = window.setTimeout(() => {
+      swap();
+      requestAnimationFrame(() => {
+        this.bgLayer.style.opacity = '1';
+        this.sceneLayer.style.opacity = '1';
+      });
+    }, ms);
   }
 
   private renderScene() {
@@ -1011,6 +1040,7 @@ export class Engine {
     const dlg = this.project.dialogues.find((d) => d.id === id);
     if (!dlg || !dlg.startNodeId) return;
     this.currentDialogue = dlg;
+    this.currentSpeakerNpcId = null;
     this.showNode(dlg.startNodeId);
   }
 
@@ -1061,21 +1091,43 @@ export class Engine {
 
   private endDialogue() {
     this.currentDialogue = null;
+    this.currentSpeakerNpcId = null;
     this.dialogueLayer.innerHTML = '';
     this.dialogueActive = false;
     this.applySceneDim();
   }
 
+  /** Скин диалогового блока для текущего собеседника (фракция NPC последней реплики) */
+  private resolveSkin(): { cls: string; accent: string | null } {
+    const npc = this.currentSpeakerNpcId
+      ? this.project.npcs?.find((x) => x.id === this.currentSpeakerNpcId)
+      : undefined;
+    const faction = npc?.factionId
+      ? this.project.factions?.find((f) => f.id === npc.factionId)
+      : undefined;
+    if (faction?.skinId) return { cls: `dskin-${faction.skinId}`, accent: faction.color };
+    return { cls: '', accent: null };
+  }
+
   private makeBox(): HTMLElement {
     const t = this.project.theme;
     this.dialogueLayer.innerHTML = '';
+    const { cls, accent } = this.resolveSkin();
     const box = document.createElement('div');
-    box.style.cssText = `position:absolute;left:8%;right:8%;bottom:5%;
-      background:${t.dialogueBox};color:${t.dialogueText};
-      border:1px solid rgba(255,255,255,0.07);border-top:1px solid ${t.accent}22;
-      padding:1.8% 3.2%;pointer-events:auto;backdrop-filter:blur(8px);
+    box.className = `dbox ${cls}`;
+    box.style.setProperty('--dbox-bg', t.dialogueBox);
+    box.style.setProperty('--dbox-border-accent', accent ?? t.accent);
+    box.style.setProperty('--dbox-name-accent', accent ?? t.speakerColor);
+    box.style.cssText += `position:absolute;left:8%;right:8%;bottom:5%;
+      color:${t.dialogueText};
+      border-left:1px solid rgba(255,255,255,0.07);border-right:1px solid rgba(255,255,255,0.07);
+      border-bottom:1px solid rgba(255,255,255,0.07);
+      padding:1.8% 3.2%;pointer-events:auto;
       font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.42;`;
     this.dialogueLayer.appendChild(box);
+    // форс-reflow, чтобы анимация входа проигрывалась заново на каждой реплике
+    void box.offsetWidth;
+    box.classList.add('enter');
     // пока открыт диалог — действия сцены гаснут (конфликт слоёв снят)
     this.dialogueActive = true;
     this.applySceneDim();
@@ -1093,9 +1145,10 @@ export class Engine {
 
   private renderLine(n: DialogueNode) {
     const t = this.project.theme;
+    const npc = n.speakerNpcId ? this.project.npcs?.find((x) => x.id === n.speakerNpcId) : undefined;
+    this.currentSpeakerNpcId = npc?.id ?? null;
     const box = this.makeBox();
 
-    const npc = n.speakerNpcId ? this.project.npcs?.find((x) => x.id === n.speakerNpcId) : undefined;
     if (npc) {
       // первое знакомство
       if (this.state[npc.metVarId] !== true) {
@@ -1108,23 +1161,26 @@ export class Engine {
       const head = document.createElement('div');
       head.style.cssText = 'display:flex;align-items:center;gap:0.8em;margin-bottom:0.7em;';
       const img = document.createElement('img');
+      img.className = 'dportrait';
       img.src = npcPortrait(this.project, npc);
       img.style.cssText = `width:2.6em;height:2.6em;border-radius:50%;flex:0 0 auto;
-        border:1px solid ${t.accent}55;padding:2px;box-sizing:border-box;`;
+        border:1px solid color-mix(in srgb, var(--dbox-name-accent) 55%, transparent);padding:2px;box-sizing:border-box;`;
       head.appendChild(img);
       const nameWrap = document.createElement('div');
       const sp = document.createElement('div');
-      sp.style.cssText = `color:${t.speakerColor};font-size:0.68em;letter-spacing:4px;
-        text-transform:uppercase;font-weight:600;`;
+      sp.className = 'dname';
+      sp.style.color = 'var(--dbox-name-accent)';
       sp.textContent = npc.name;
       nameWrap.appendChild(sp);
       // Осколок ур.1+: видно отношение собеседника (тонкая hairline-шкала)
       if (this.oskolokLevel >= 1) {
         const rel = Number(this.state[npc.relationVarId] ?? 0);
         const bar = document.createElement('div');
+        bar.className = 'drel';
         bar.style.cssText = `margin-top:0.4em;width:10em;height:2px;
           background:rgba(255,255,255,0.09);overflow:hidden;`;
         const fill = document.createElement('div');
+        fill.className = 'drel-fill';
         fill.style.cssText = `height:100%;width:${rel}%;
           background:${relColor(rel)};transition:width .3s;`;
         bar.appendChild(fill);
@@ -1135,18 +1191,19 @@ export class Engine {
       box.appendChild(head);
     } else if (n.speaker) {
       const sp = document.createElement('div');
-      sp.style.cssText = `color:${t.speakerColor};font-size:0.68em;letter-spacing:4px;
-        text-transform:uppercase;margin-bottom:0.6em;font-weight:600;`;
+      sp.className = 'dname';
+      sp.style.cssText = 'color:var(--dbox-name-accent);margin-bottom:0.6em;';
       sp.textContent = n.speaker;
       box.appendChild(sp);
     }
     const txt = document.createElement('div');
     txt.style.cssText = 'line-height:1.42;';
-    this.setParagraphs(txt, this.interpolate(n.text ?? ''));
+    this.setParagraphs(txt, this.interpolate(n.text ?? ''), 'dline');
     box.appendChild(txt);
 
     const hint = document.createElement('div');
-    hint.style.cssText = `margin-top:1em;text-align:right;opacity:0.4;font-size:0.6em;
+    hint.className = 'dhint';
+    hint.style.cssText = `margin-top:1em;text-align:right;font-size:0.6em;
       letter-spacing:3px;text-transform:uppercase;`;
     hint.textContent = 'дальше ▸';
     box.appendChild(hint);
@@ -1159,6 +1216,7 @@ export class Engine {
     const t = this.project.theme;
     const box = this.makeBox();
     const list = document.createElement('div');
+    list.className = 'dchoices';
     list.style.cssText = 'display:flex;flex-direction:column;gap:0.5em;';
     box.appendChild(list);
 
@@ -1175,6 +1233,7 @@ export class Engine {
         }
       }
       const btn = document.createElement('div');
+      btn.className = 'dchoice';
       btn.style.cssText = `background:${t.choiceBg};color:${t.choiceText};
         padding:0.5em 1em 0.5em 0.9em;cursor:pointer;display:flex;gap:0.8em;
         align-items:baseline;border-left:2px solid transparent;
@@ -1183,14 +1242,14 @@ export class Engine {
       mark.style.cssText = 'flex:0 0 1em;font-size:0.7em;';
       if (delta > 0) { mark.textContent = '▲'; mark.style.color = '#98c379'; }
       else if (delta < 0) { mark.textContent = '▼'; mark.style.color = '#e06c75'; }
-      else { mark.textContent = '◊'; mark.style.color = `${t.accent}66`; }
+      else { mark.textContent = '◊'; mark.style.color = 'color-mix(in srgb, var(--dbox-border-accent) 66%, transparent)'; }
       btn.appendChild(mark);
       const txt = document.createElement('span');
       txt.textContent = this.interpolate(c.text);
       btn.appendChild(txt);
       btn.onmouseenter = () => {
         btn.style.background = t.choiceHover;
-        btn.style.borderLeftColor = t.accent;
+        btn.style.borderLeftColor = 'var(--dbox-border-accent)';
       };
       btn.onmouseleave = () => {
         btn.style.background = t.choiceBg;

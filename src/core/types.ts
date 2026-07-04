@@ -201,6 +201,17 @@ export interface Dialogue {
 }
 
 // ---------- Фракции и NPC ----------
+/** Визуальное оформление диалогового блока для NPC этой фракции (см. src/runtime/dialoguefx.ts) */
+export type FactionSkinId = 'flux' | 'sylvarium' | 'woodhaven' | 'cavernium' | 'aeralis' | 'hydrosynth';
+export const FACTION_SKIN_LABELS: Record<FactionSkinId, string> = {
+  flux: 'Flux Nomads — сварные скобки, пунктир',
+  sylvarium: 'Sylvarium — мягкие углы, живая линия',
+  woodhaven: 'Woodhaven — без блюра, зерно, засечки',
+  cavernium: 'Cavernium — плотный фон, двойная линия',
+  aeralis: 'Aeralis — прозрачность, дистанция',
+  hydrosynth: 'Hydrosynth — мягкие углы, блик по линии',
+};
+
 export interface Faction {
   id: string;
   name: string;
@@ -210,6 +221,7 @@ export interface Faction {
   repMode: 'weighted' | 'equal';
   description?: string;
   repVarId: string;          // авто-переменная category:'computed' — репутация 0..100
+  skinId?: FactionSkinId;    // оформление диалогового блока; нет — как сейчас (нейтральная тема)
 }
 
 export interface NPC {
