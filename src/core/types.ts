@@ -357,6 +357,21 @@ export interface QuestDef {
   enabled: boolean;
 }
 
+// ---------- Достижения ----------
+// Разово разблокируется, когда все условия истинны, и остаётся разблокированным навсегда
+// (даже если условия потом перестанут выполняться) — тот же принцип необратимости, что
+// и у QuestStep, но без цепочки этапов и без daily/weekly сброса.
+export interface AchievementDef {
+  id: string;
+  title: string;
+  description?: string;
+  icon?: string;             // эмодзи/короткий символ
+  conditions: Condition[];
+  rewardEffects?: Effect[];
+  rewardItems?: ItemGrant[];
+  enabled: boolean;
+}
+
 // ---------- Улучшения (idle-прокачка: дроны, контракты) ----------
 export interface UpgradeDef {
   id: string;
@@ -396,6 +411,7 @@ export interface PlaytestCheckpoint {
   claims?: Record<string, string>;          // забранные награды заданий
   ups?: Record<string, number>;             // уровни улучшений
   qsteps?: Record<string, number>;          // прогресс цепочек заданий (id → пройдено этапов)
+  achievements?: Record<string, boolean>;   // разблокированные достижения
 }
 
 // ---------- Idle-правила (пассивный прогресс) ----------
@@ -442,6 +458,7 @@ export interface Project {
   quests?: QuestDef[];
   upgrades?: UpgradeDef[];
   decodes?: DecodeDef[];
+  achievements?: AchievementDef[];
   playtests?: PlaytestCheckpoint[];
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;

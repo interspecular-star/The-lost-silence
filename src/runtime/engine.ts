@@ -42,6 +42,7 @@ interface SaveData {
   ups?: Record<string, number>;             // улучшения: id → уровень
   qsteps?: Record<string, number>;          // цепочки заданий: id → пройдено этапов
   decode?: { defId: string; startedAt: number } | null;
+  achievements?: Record<string, boolean>;   // достижения: id → разблокировано (навсегда)
 }
 
 export class Engine {
@@ -95,6 +96,7 @@ export class Engine {
   questSteps: Record<string, number> = {};   // id задания → пройдено этапов цепочки
   upgradeLevels: Record<string, number> = {};
   activeDecode: { defId: string; startedAt: number } | null = null;
+  achievements: Record<string, boolean> = {}; // id достижения → разблокировано (навсегда)
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
   /** NPC последней показанной реплики — определяет фракционный скин диалогового блока */
@@ -188,6 +190,7 @@ export class Engine {
         this.questSteps = save.qsteps ?? {};
         this.upgradeLevels = save.ups ?? {};
         this.activeDecode = save.decode ?? null;
+        this.achievements = save.achievements ?? {};
         if (save.sceneId && this.project.scenes.some((s) => s.id === save.sceneId)) {
           startId = save.sceneId;
         }
@@ -207,6 +210,7 @@ export class Engine {
       this.questClaims = { ...(cp.claims ?? {}) };
       this.questSteps = { ...(cp.qsteps ?? {}) };
       this.upgradeLevels = { ...(cp.ups ?? {}) };
+      this.achievements = { ...(cp.achievements ?? {}) };
       if (cp.sceneId && this.project.scenes.some((s) => s.id === cp.sceneId)) startId = cp.sceneId;
     }
     if (this.opts.startSceneId && this.project.scenes.some((s) => s.id === this.opts.startSceneId)) {
@@ -220,6 +224,7 @@ export class Engine {
 
     if (startId) this.gotoScene(startId);
     this.checkQuestSteps(true); // тривиально выполненные этапы фиксируем без уведомлений
+    this.checkAchievements(true);
     this.opts.onVarsChanged?.(this.state);
     this.startIdleTicks();
   }
@@ -240,6 +245,7 @@ export class Engine {
       claims: { ...this.questClaims },
       ups: { ...this.upgradeLevels },
       qsteps: { ...this.questSteps },
+      achievements: { ...this.achievements },
     };
   }
 
@@ -414,12 +420,14 @@ export class Engine {
     const rules = this.project.idleRules?.filter((r) => r.enabled) ?? [];
     const hasChains = (this.project.quests ?? []).some((q) => q.enabled && q.steps?.length);
     const hasBgEffects = this.project.scenes.some((s) => s.bgEffects?.length);
-    if (rules.length === 0 && !this.heroEnabled && !hasChains && !hasBgEffects) return;
+    const hasAchievements = (this.project.achievements?.length ?? 0) > 0;
+    if (rules.length === 0 && !this.heroEnabled && !hasChains && !hasBgEffects && !hasAchievements) return;
     this.tickTimer = window.setInterval(() => {
       if (this.destroyed) return;
       this.applyIdle(1 / 60, false); // тик раз в секунду
       this.regenTick();
       this.checkQuestSteps();
+      this.checkAchievements();
       if (this.currentScene) this.refreshBgEffects(this.currentScene);
     }, 1000);
   }
@@ -521,6 +529,7 @@ export class Engine {
           claims: this.questClaims,
           ups: this.upgradeLevels,
           qsteps: this.questSteps,
+          achievements: this.achievements,
           decode: this.activeDecode,
         };
         localStorage.setItem(this.saveKey(), JSON.stringify(data));
@@ -593,6 +602,7 @@ export class Engine {
     this.checkLevelUp();
     this.recomputeDerived();
     this.checkQuestSteps();
+    this.checkAchievements();
     this.opts.onVarsChanged?.(this.state);
     this.renderScene(); // условная видимость элементов могла измениться
     this.scheduleSave();
@@ -623,6 +633,22 @@ export class Engine {
         this.scheduleSave();
       }
     }
+  }
+
+  /** Разблокирует достижения навсегда, когда их условия истинны. Не отменяется, даже
+   *  если условия потом перестанут выполняться. silent — без уведомлений (при старте). */
+  checkAchievements(silent = false) {
+    let unlocked = false;
+    for (const a of this.project.achievements ?? []) {
+      if (!a.enabled || this.achievements[a.id]) continue;
+      if (!this.checkConditions(a.conditions)) continue;
+      this.achievements[a.id] = true;
+      unlocked = true;
+      if (a.rewardEffects?.length) this.applyEffects(a.rewardEffects);
+      if (a.rewardItems?.length) this.giveItems(a.rewardItems);
+      if (!silent) this.notify(`🏆 ${a.title}`, '#f4d35e');
+    }
+    if (unlocked) this.scheduleSave();
   }
 
   // ---------- сцены ----------
@@ -748,11 +774,12 @@ export class Engine {
     inv.onclick = () => { this.invOpen = !this.invOpen; this.renderInventory(); };
     wrap.appendChild(inv);
 
-    // журнал (задания/улучшения/OldNet/персонажи) — если в проекте есть содержимое
+    // журнал (задания/улучшения/OldNet/персонажи/достижения) — если в проекте есть содержимое
     const hasJournal = (this.project.quests?.length ?? 0) + (this.project.upgrades?.length ?? 0)
-      + (this.project.decodes?.length ?? 0) + (this.project.npcs?.length ?? 0) > 0;
+      + (this.project.decodes?.length ?? 0) + (this.project.npcs?.length ?? 0)
+      + (this.project.achievements?.length ?? 0) > 0;
     if (hasJournal) {
-      const j = quietBtn('📋', 'Журнал: задания, улучшения, OldNet, персонажи');
+      const j = quietBtn('📋', 'Журнал: задания, улучшения, OldNet, персонажи, достижения');
       j.onclick = () => this.openJournal();
       wrap.appendChild(j);
     }
@@ -1155,6 +1182,7 @@ export class Engine {
         this.state[npc.metVarId] = true;
         materializeFactionReps(this.project, this.state);
         this.checkQuestSteps();
+        this.checkAchievements();
         this.opts.onVarsChanged?.(this.state);
         this.scheduleSave();
       }

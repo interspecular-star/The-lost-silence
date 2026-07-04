@@ -4,7 +4,7 @@
 
 import { Store } from '../core/store';
 import {
-  QuestDef, QuestStep, Condition, Effect, ItemGrant, uid,
+  QuestDef, QuestStep, AchievementDef, Condition, Effect, ItemGrant, uid,
 } from '../core/types';
 import {
   h, textInput, numberInput, selectInput, textArea, checkbox,
@@ -20,6 +20,7 @@ export function mountQuests(store: Store): HTMLElement {
     renderQuestList();
     renderUpgradeList();
     renderDecodeList();
+    renderAchievementList();
   };
 
   // ---------- общие мини-редакторы ----------
@@ -383,6 +384,61 @@ export function mountQuests(store: Store): HTMLElement {
       c.appendChild(effectsMini(dec.rewardEffects ?? [], (l) => mutate(() => { dec.rewardEffects = l.length ? l : undefined; })));
       c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Награда — предметы:' }));
       c.appendChild(grantsMini(dec.rewardItems ?? [], (l) => mutate(() => { dec.rewardItems = l.length ? l : undefined; })));
+      grid.appendChild(c);
+    }
+    root.appendChild(grid);
+  }
+
+  // ---------- достижения ----------
+  function renderAchievementList() {
+    headerRow('Достижения', '+ Достижение', async () => {
+      const name = await promptModal('Название достижения', '', 'Например: Первый контакт');
+      if (!name) return;
+      mutate(() => {
+        store.project.achievements = store.project.achievements ?? [];
+        store.project.achievements.push({
+          id: uid('ach'), title: name, conditions: [], enabled: true,
+        });
+      });
+    });
+    root.appendChild(h('div', {
+      class: 'hint', style: 'margin-bottom:10px;',
+      text: 'Разблокируется навсегда, как только верны все условия (даже если условия потом перестанут выполняться — назад не откатывается). Награда, если задана, выдаётся автоматически, без «забрать» в Журнале. Видно в Журнале 📋 → вкладка «Достижения».',
+    }));
+
+    const list = store.project.achievements ?? [];
+    if (list.length === 0) { root.appendChild(h('div', { class: 'hint', text: 'Достижений пока нет.' })); return; }
+    const grid = h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px;' });
+    for (const a of list) {
+      const c = cardShell('rgba(244,211,94,0.3)');
+      const r1 = h('div', { style: 'display:flex;gap:6px;' });
+      const en = h('input', { type: 'checkbox', class: 'ed', title: 'Включено' }) as HTMLInputElement;
+      en.checked = a.enabled;
+      en.onchange = () => mutate(() => { a.enabled = en.checked; });
+      r1.appendChild(en);
+      const icon = textInput(a.icon ?? '', (v) => mutate(() => { a.icon = v || undefined; }));
+      icon.placeholder = '🏆';
+      icon.style.cssText = 'flex:0 0 44px;text-align:center;';
+      r1.appendChild(icon);
+      const nameIn = textInput(a.title, (v) => mutate(() => { a.title = v; }));
+      nameIn.style.fontWeight = '600';
+      r1.appendChild(nameIn);
+      const del = h('button', { class: 'btn small danger-ghost', text: '✕' });
+      del.onclick = async () => {
+        if (!(await confirmModal('Удалить достижение', `«${a.title}»?`))) return;
+        mutate(() => { store.project.achievements = list.filter((x: AchievementDef) => x.id !== a.id); });
+      };
+      r1.appendChild(del);
+      c.appendChild(r1);
+      const desc = textArea(a.description ?? '', (v) => mutate(() => { a.description = v || undefined; }), 2);
+      desc.placeholder = 'Описание для игрока…';
+      c.appendChild(desc);
+      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Условия разблокировки:' }));
+      c.appendChild(condsMini(a.conditions, (l) => mutate(() => { a.conditions = l; })));
+      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Награда — эффекты (необязательно):' }));
+      c.appendChild(effectsMini(a.rewardEffects ?? [], (l) => mutate(() => { a.rewardEffects = l.length ? l : undefined; })));
+      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Награда — предметы (необязательно):' }));
+      c.appendChild(grantsMini(a.rewardItems ?? [], (l) => mutate(() => { a.rewardItems = l.length ? l : undefined; })));
       grid.appendChild(c);
     }
     root.appendChild(grid);

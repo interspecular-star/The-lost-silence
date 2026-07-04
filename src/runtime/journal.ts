@@ -31,7 +31,8 @@ export function upgradeCost(up: UpgradeDef, level: number): number {
 export function renderJournal(engine: Engine, layer: HTMLElement, close: () => void) {
   const p = engine.project;
   const hasCharacters = (p.npcs?.length ?? 0) > 0;
-  let tab: 'quests' | 'upgrades' | 'oldnet' | 'characters' = 'quests';
+  const hasAchievements = (p.achievements?.length ?? 0) > 0;
+  let tab: 'quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements' = 'quests';
 
   const backdrop = document.createElement('div');
   backdrop.style.cssText = `position:absolute;inset:0;background:rgba(2,4,6,0.72);
@@ -63,9 +64,10 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
   const head = document.createElement('div');
   head.style.cssText = `display:flex;align-items:flex-end;gap:1.8em;
     border-bottom:1px solid rgba(255,255,255,0.07);`;
-  const tabs: ['quests' | 'upgrades' | 'oldnet' | 'characters', string][] = [
+  const tabs: ['quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements', string][] = [
     ['quests', 'КВЕСТЫ'], ['upgrades', 'УЛУЧШЕНИЯ'], ['oldnet', 'АРХИВ OLDNET'],
     ...(hasCharacters ? [['characters', 'ПЕРСОНАЖИ'] as ['characters', string]] : []),
+    ...(hasAchievements ? [['achievements', '🏆 ДОСТИЖЕНИЯ'] as ['achievements', string]] : []),
   ];
   const tabEls = new Map<string, HTMLElement>();
   for (const [key, label] of tabs) {
@@ -393,6 +395,44 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
     body.appendChild(grid);
   }
 
+  // ---------- вкладка: достижения ----------
+  function renderAchievements() {
+    const list = (p.achievements ?? []).filter((a) => a.enabled);
+    if (list.length === 0) {
+      body.appendChild(hint('Достижений пока нет.'));
+      return;
+    }
+    for (const a of list) {
+      const unlocked = !!engine.achievements[a.id];
+      const c = card(unlocked ? '#f4d35e' : undefined);
+      if (!unlocked) c.style.opacity = '0.5';
+      const icon = document.createElement('div');
+      icon.textContent = a.icon || '🏆';
+      icon.style.cssText = 'font-size:1.6em;flex:0 0 auto;line-height:1;';
+      c.appendChild(icon);
+      const info = document.createElement('div');
+      info.style.cssText = 'flex:1;min-width:0;';
+      const title = document.createElement('div');
+      title.textContent = a.title;
+      title.style.cssText = `font-weight:400;color:${unlocked ? '#f4d35e' : '#e6edf3'};`;
+      info.appendChild(title);
+      if (a.description) {
+        const d = document.createElement('div');
+        d.textContent = a.description;
+        d.style.cssText = 'font-size:0.78em;color:#8fa2af;margin-top:0.25em;font-weight:300;';
+        info.appendChild(d);
+      }
+      c.appendChild(info);
+      if (unlocked) {
+        const tag = document.createElement('div');
+        tag.textContent = '✓ ПОЛУЧЕНО';
+        tag.style.cssText = 'font-size:0.66em;letter-spacing:2px;color:#f4d35e;flex:0 0 auto;';
+        c.appendChild(tag);
+      }
+      body.appendChild(c);
+    }
+  }
+
   /** Оверлей «кусок правды» — терминал OldNet (скан-линии, амбер-сбой) */
   function showTruth(title: string, text: string) {
     const o = document.createElement('div');
@@ -498,6 +538,7 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
     if (tab === 'quests') renderQuests();
     else if (tab === 'upgrades') renderUpgrades();
     else if (tab === 'characters') renderCharacters();
+    else if (tab === 'achievements') renderAchievements();
     else renderOldnet();
   }
 
