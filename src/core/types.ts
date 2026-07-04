@@ -109,6 +109,7 @@ export interface Scene {
   elements: SceneElement[];
   guides: Guide[];
   onEnterDialogueId?: string; // диалог, запускаемый при входе в сцену
+  hudMode?: 'auto' | 'on' | 'off'; // 'auto' — HUD скрыт на страницах, показан на локациях/уровнях
 }
 
 // ---------- Диалоги (нодовый граф) ----------

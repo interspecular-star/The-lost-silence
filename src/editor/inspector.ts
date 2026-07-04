@@ -106,6 +106,11 @@ export function mountInspector(root: HTMLElement, store: Store) {
       row('Стартовая', checkbox(store.project.startSceneId === scene.id, (v) => mutate(() => {
         if (v) store.project.startSceneId = scene.id;
       }), 'игра начинается здесь')),
+      row('HUD', selectInput(scene.hudMode ?? 'auto', [
+        ['auto', 'Авто (скрыт на страницах)'],
+        ['on', 'Показывать'],
+        ['off', 'Скрывать'],
+      ], (v) => mutate(() => { scene.hudMode = v as typeof scene.hudMode; }))),
     ));
 
     const bgUpload = h('button', { class: 'btn small block', text: '📁 Загрузить картинку фона…' });

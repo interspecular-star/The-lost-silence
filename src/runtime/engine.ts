@@ -491,10 +491,18 @@ export class Engine {
     this.renderOskolokHUD();
   }
 
+  /** HUD включён/выключен для текущей сцены: явный выбор в инспекторе или авто (скрыт на страницах) */
+  private hudVisible(): boolean {
+    const mode = this.currentScene?.hudMode ?? 'auto';
+    if (mode === 'on') return true;
+    if (mode === 'off') return false;
+    return this.currentScene?.kind !== 'page';
+  }
+
   /** Единый HUD-бар: слева уровень/hp/foc + инвентарь, справа кредиты (не на страницах-меню) */
   private renderHeroHUD() {
     if (!this.heroEnabled) return;
-    if (this.currentScene?.kind === 'page') return;
+    if (!this.hudVisible()) return;
     const v = (name: string) => Number(this.state[heroVarId(this.project, name) ?? ''] ?? 0);
     const wrap = document.createElement('div');
     wrap.style.cssText = `position:absolute;top:2.5%;left:calc(2% + 2.1em);display:flex;align-items:center;
@@ -573,6 +581,7 @@ export class Engine {
   }
 
   private renderOskolokHUD() {
+    if (!this.hudVisible()) return;
     const factions = this.project.factions ?? [];
     // панель фракций доступна с ур.2 Осколка
     if (this.oskolokLevel < 2 || factions.length === 0) return;
