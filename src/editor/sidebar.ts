@@ -10,8 +10,16 @@ import {
 import { h, promptModal, confirmModal, toast } from './ui';
 
 const KIND_ICONS: Record<SceneKind, string> = { page: '▤', location: '◈', level: '⬢' };
+const COLLAPSE_KEY = 'tls_sidebar_collapsed_kinds';
 
 export function mountSidebar(root: HTMLElement, store: Store) {
+  const collapsedKinds = new Set<SceneKind>(
+    JSON.parse(localStorage.getItem(COLLAPSE_KEY) ?? '[]') as SceneKind[],
+  );
+  const saveCollapsed = () => {
+    localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...collapsedKinds]));
+  };
+
   const render = () => {
     root.innerHTML = '';
     if (store.mode === 'scene') renderScenes();
@@ -69,10 +77,22 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     const kinds: SceneKind[] = ['page', 'location', 'level'];
 
     for (const kind of kinds) {
+      const scenesOfKind = store.project.scenes.filter((s) => s.kind === kind);
+      const collapsed = collapsedKinds.has(kind);
+
       const header = h('div', { class: 'sb-header' });
-      header.appendChild(h('span', { text: SCENE_KIND_LABELS[kind] }));
+      const titleWrap = h('div', { class: 'sb-header-title' });
+      titleWrap.appendChild(h('span', { class: 'sb-collapse-arrow', text: collapsed ? '▸' : '▾' }));
+      titleWrap.appendChild(h('span', { text: `${SCENE_KIND_LABELS[kind]} (${scenesOfKind.length})` }));
+      titleWrap.onclick = () => {
+        if (collapsed) collapsedKinds.delete(kind); else collapsedKinds.add(kind);
+        saveCollapsed();
+        render();
+      };
+      header.appendChild(titleWrap);
       const add = h('button', { class: 'sb-add', text: '+', title: `Добавить: ${SCENE_KIND_LABELS[kind]}` });
-      add.onclick = async () => {
+      add.onclick = async (e) => {
+        e.stopPropagation();
         const name = await promptModal(`Название (${SCENE_KIND_LABELS[kind]})`, '', 'Например: Ангар Flux Nomads');
         if (!name) return;
         store.snapshot();
@@ -88,8 +108,10 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       header.appendChild(add);
       list.appendChild(header);
 
-      for (const scene of store.project.scenes.filter((s) => s.kind === kind)) {
-        list.appendChild(sceneItem(scene));
+      if (!collapsed) {
+        for (const scene of scenesOfKind) {
+          list.appendChild(sceneItem(scene));
+        }
       }
     }
     root.appendChild(list);
@@ -126,7 +148,13 @@ export function mountSidebar(root: HTMLElement, store: Store) {
   }
 
   function sceneItem(scene: Scene): HTMLElement {
-    const item = h('div', { class: `sb-item${store.currentSceneId === scene.id ? ' active' : ''}` });
+    const item = h('div', {
+      class: `sb-item${store.currentSceneId === scene.id ? ' active' : ''}`,
+      'data-scene-id': scene.id,
+    });
+    const handle = h('span', { class: 'sb-drag-handle', text: '⠿', title: 'Перетащить для изменения порядка' });
+    handle.onpointerdown = (e) => startSceneDrag(scene, e);
+    item.appendChild(handle);
     item.appendChild(h('span', { class: 'sb-icon', text: KIND_ICONS[scene.kind] }));
     const isStart = store.project.startSceneId === scene.id;
     item.appendChild(h('span', { class: 'sb-name', text: scene.name + (isStart ? ' ▶' : '') }));
@@ -138,6 +166,65 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     item.appendChild(menu);
     item.onclick = () => store.selectScene(scene.id);
     return item;
+  }
+
+  function startSceneDrag(scene: Scene, e: PointerEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragging = false;
+    let ghost: HTMLElement | null = null;
+
+    const clearDropMarks = () => {
+      root.querySelectorAll('.sb-item.drop-before, .sb-item.drop-after')
+        .forEach((n) => n.classList.remove('drop-before', 'drop-after'));
+    };
+    const findTarget = (ev: PointerEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.sb-item[data-scene-id]') as HTMLElement | null;
+      if (!el || el.dataset.sceneId === scene.id) return null;
+      const targetScene = store.project.scenes.find((s) => s.id === el.dataset.sceneId);
+      if (!targetScene || targetScene.kind !== scene.kind) return null;
+      return { el, targetScene };
+    };
+
+    const move = (ev: PointerEvent) => {
+      if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+      if (!dragging) {
+        dragging = true;
+        ghost = h('div', { class: 'sb-drag-ghost', text: scene.name });
+        document.body.appendChild(ghost);
+      }
+      ghost!.style.left = `${ev.clientX + 14}px`;
+      ghost!.style.top = `${ev.clientY}px`;
+      clearDropMarks();
+      const found = findTarget(ev);
+      if (found) {
+        const rect = found.el.getBoundingClientRect();
+        const after = ev.clientY > rect.top + rect.height / 2;
+        found.el.classList.add(after ? 'drop-after' : 'drop-before');
+      }
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      clearDropMarks();
+      ghost?.remove();
+      if (!dragging) return;
+      const found = findTarget(ev);
+      if (!found) return;
+      const rect = found.el.getBoundingClientRect();
+      const after = ev.clientY > rect.top + rect.height / 2;
+      store.snapshot();
+      const arr = store.project.scenes;
+      arr.splice(arr.indexOf(scene), 1);
+      let to = arr.indexOf(found.targetScene);
+      if (after) to += 1;
+      arr.splice(to, 0, scene);
+      store.emit('change');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   }
 
   function showSceneMenu(scene: Scene, anchor: HTMLElement) {
