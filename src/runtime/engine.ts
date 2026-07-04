@@ -12,7 +12,7 @@ import {
 } from '../core/types';
 import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
-import { materializeFactionReps, computeFactionRep, npcPortrait } from '../core/npc';
+import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
 } from '../core/hero';
@@ -748,11 +748,11 @@ export class Engine {
     inv.onclick = () => { this.invOpen = !this.invOpen; this.renderInventory(); };
     wrap.appendChild(inv);
 
-    // журнал (задания/улучшения/OldNet) — если в проекте есть содержимое
+    // журнал (задания/улучшения/OldNet/персонажи) — если в проекте есть содержимое
     const hasJournal = (this.project.quests?.length ?? 0) + (this.project.upgrades?.length ?? 0)
-      + (this.project.decodes?.length ?? 0) > 0;
+      + (this.project.decodes?.length ?? 0) + (this.project.npcs?.length ?? 0) > 0;
     if (hasJournal) {
-      const j = quietBtn('📋', 'Журнал: задания, улучшения, OldNet');
+      const j = quietBtn('📋', 'Журнал: задания, улучшения, OldNet, персонажи');
       j.onclick = () => this.openJournal();
       wrap.appendChild(j);
     }
@@ -1163,8 +1163,13 @@ export class Engine {
       const img = document.createElement('img');
       img.className = 'dportrait';
       img.src = npcPortrait(this.project, npc);
-      img.style.cssText = `width:2.6em;height:2.6em;border-radius:50%;flex:0 0 auto;
-        border:1px solid color-mix(in srgb, var(--dbox-name-accent) 55%, transparent);padding:2px;box-sizing:border-box;`;
+      img.style.cssText = `width:2.6em;height:2.6em;border-radius:50%;flex:0 0 auto;cursor:pointer;
+        border:1px solid color-mix(in srgb, var(--dbox-name-accent) 55%, transparent);padding:2px;box-sizing:border-box;
+        transition:transform .15s;`;
+      img.title = 'Открыть профиль персонажа';
+      img.onmouseenter = () => { img.style.transform = 'scale(1.08)'; };
+      img.onmouseleave = () => { img.style.transform = ''; };
+      img.onclick = (e) => { e.stopPropagation(); this.openCharacterProfile(npc.id); };
       head.appendChild(img);
       const nameWrap = document.createElement('div');
       const sp = document.createElement('div');
@@ -1272,6 +1277,154 @@ export class Engine {
     this.invOpen = false;
     this.invLayer.innerHTML = '';
     renderJournal(this, this.invLayer, () => { this.invLayer.innerHTML = ''; this.renderHUD(); });
+  }
+
+  // ---------- профиль персонажа (экран) ----------
+  /** Открыть профиль NPC — из клика по портрету в диалоге или из вкладки «Персонажи» журнала */
+  openCharacterProfile(npcId: string) {
+    this.invOpen = false;
+    this.invLayer.innerHTML = '';
+    this.renderCharacterProfile(npcId);
+  }
+
+  private renderCharacterProfile(npcId: string) {
+    const npc = this.project.npcs?.find((n) => n.id === npcId);
+    this.invLayer.innerHTML = '';
+    if (!npc) return;
+    const met = this.state[npc.metVarId] === true;
+    const faction = npc.factionId ? this.project.factions?.find((f) => f.id === npc.factionId) : undefined;
+    const accent = faction?.color ?? this.project.theme.accent;
+
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = `position:absolute;inset:0;background:rgba(2,4,6,0.72);
+      pointer-events:auto;backdrop-filter:blur(3px);`;
+    backdrop.onclick = (e) => { if (e.target === backdrop) { this.invLayer.innerHTML = ''; this.renderHUD(); } };
+    this.invLayer.appendChild(backdrop);
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      width:76%;max-width:52em;height:86%;background:rgba(6,10,14,0.97);
+      border:1px solid rgba(255,255,255,0.08);border-top:1px solid color-mix(in srgb, ${accent} 20%, transparent);
+      display:flex;font-size:0.85em;color:#cfd9e2;overflow:hidden;`;
+    backdrop.appendChild(panel);
+
+    const close = document.createElement('div');
+    close.textContent = '✕';
+    close.style.cssText = 'position:absolute;top:0.8em;right:1em;cursor:pointer;opacity:0.5;font-size:1.1em;z-index:1;';
+    close.onclick = () => { this.invLayer.innerHTML = ''; this.renderHUD(); };
+    panel.appendChild(close);
+
+    // ---- левая колонка: портрет ----
+    const left = document.createElement('div');
+    left.style.cssText = 'flex:0 0 38%;position:relative;background:#05070a;';
+    const img = document.createElement('img');
+    img.src = met ? npcFullPortrait(this.project, npc) : placeholderFullPortrait('?', '#5f7a8a');
+    img.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+    left.appendChild(img);
+    panel.appendChild(left);
+
+    // ---- правая колонка: досье ----
+    const right = document.createElement('div');
+    right.style.cssText = 'flex:1;padding:1.6em 1.8em;overflow-y:auto;min-width:0;';
+    panel.appendChild(right);
+
+    if (!met) {
+      right.innerHTML = '';
+      const kicker = document.createElement('div');
+      kicker.textContent = 'НЕИЗВЕСТНАЯ ЛИЧНОСТЬ';
+      kicker.style.cssText = 'font-size:0.7em;letter-spacing:3px;color:#5f7a8a;margin-bottom:0.6em;';
+      right.appendChild(kicker);
+      const hint = document.createElement('div');
+      hint.style.cssText = 'opacity:0.6;line-height:1.5;';
+      hint.textContent = 'Вы ещё не встречали этого человека.';
+      right.appendChild(hint);
+      return;
+    }
+
+    const nameEl = document.createElement('div');
+    nameEl.textContent = npc.name;
+    nameEl.style.cssText = `font-size:1.6em;font-weight:200;letter-spacing:2px;color:#e6edf3;margin-bottom:0.2em;`;
+    right.appendChild(nameEl);
+
+    if (faction) {
+      const badge = document.createElement('div');
+      badge.textContent = faction.name;
+      badge.style.cssText = `display:inline-block;color:${accent};font-size:0.68em;letter-spacing:3px;
+        text-transform:uppercase;border-bottom:1px solid color-mix(in srgb, ${accent} 40%, transparent);
+        padding-bottom:0.3em;margin-bottom:0.9em;`;
+      right.appendChild(badge);
+    }
+
+    if (npc.quote) {
+      const quote = document.createElement('div');
+      quote.textContent = `«${npc.quote}»`;
+      quote.style.cssText = 'font-style:italic;opacity:0.75;line-height:1.5;margin-bottom:1.1em;';
+      right.appendChild(quote);
+    }
+
+    // отношение — та же hairline-полоса, что и в диалоге (Осколок ур.1+)
+    if (this.oskolokLevel >= 1) {
+      const rel = Number(this.state[npc.relationVarId] ?? 0);
+      const row = document.createElement('div');
+      row.style.cssText = 'margin-bottom:1.2em;';
+      const label = document.createElement('div');
+      label.textContent = `ОТНОШЕНИЕ · ${rel}/100`;
+      label.style.cssText = 'font-size:0.65em;letter-spacing:2px;color:#5f7a8a;margin-bottom:0.4em;';
+      row.appendChild(label);
+      const bar = document.createElement('div');
+      bar.style.cssText = 'width:100%;max-width:16em;height:2px;background:rgba(255,255,255,0.09);overflow:hidden;';
+      const fill = document.createElement('div');
+      fill.style.cssText = `height:100%;width:${rel}%;background:${relColor(rel)};transition:width .3s;`;
+      bar.appendChild(fill);
+      row.appendChild(bar);
+      right.appendChild(row);
+    }
+
+    const section = (title: string, text?: string) => {
+      if (!text) return;
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin-bottom:1.1em;';
+      const h = document.createElement('div');
+      h.textContent = title;
+      h.style.cssText = 'font-size:0.65em;letter-spacing:2px;color:#5f7a8a;margin-bottom:0.3em;text-transform:uppercase;';
+      wrap.appendChild(h);
+      const body = document.createElement('div');
+      body.style.cssText = 'line-height:1.5;';
+      this.setParagraphs(body, text);
+      wrap.appendChild(body);
+      right.appendChild(wrap);
+    };
+    section('Досье', npc.description);
+    section('Сильные стороны', npc.strengths);
+    section('Слабые стороны', npc.weaknesses);
+    section('Желания', npc.wants);
+
+    if (npc.relationships?.length) {
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'margin-bottom:1.1em;';
+      const h = document.createElement('div');
+      h.textContent = 'Связи';
+      h.style.cssText = 'font-size:0.65em;letter-spacing:2px;color:#5f7a8a;margin-bottom:0.5em;text-transform:uppercase;';
+      wrap.appendChild(h);
+      for (const rel of npc.relationships) {
+        const other = this.project.npcs?.find((n) => n.id === rel.npcId);
+        if (!other) continue;
+        const row = document.createElement('div');
+        row.style.cssText = `display:flex;justify-content:space-between;gap:1em;padding:0.4em 0;
+          border-bottom:1px solid rgba(255,255,255,0.06);cursor:pointer;`;
+        const otherFaction = other.factionId ? this.project.factions?.find((f) => f.id === other.factionId) : undefined;
+        const nm = document.createElement('span');
+        nm.textContent = other.name;
+        nm.style.color = otherFaction?.color ?? '#cfd9e2';
+        const lb = document.createElement('span');
+        lb.textContent = rel.label;
+        lb.style.cssText = 'opacity:0.6;';
+        row.append(nm, lb);
+        row.onclick = () => this.renderCharacterProfile(other.id);
+        wrap.appendChild(row);
+      }
+      right.appendChild(wrap);
+    }
   }
 
   // ---------- инвентарь (экран) ----------

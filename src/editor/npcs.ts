@@ -3,17 +3,18 @@
 // ============================================================
 
 import { Store } from '../core/store';
-import { NPC, Faction, FactionSkinId, FACTION_SKIN_LABELS } from '../core/types';
+import { NPC, NPCRelationship, Faction, FactionSkinId, FACTION_SKIN_LABELS, uid } from '../core/types';
 import {
-  createNPC, createFaction, deleteNPC, renameNPC, npcPortrait,
+  createNPC, createFaction, deleteNPC, renameNPC, npcPortrait, npcFullPortrait,
 } from '../core/npc';
 import {
   h, textInput, numberInput, selectInput, textArea,
-  promptModal, confirmModal, toast, pickImageFile,
+  promptModal, confirmModal, toast, pickImageFile, pickImageFileCompressed,
 } from './ui';
 
 export function mountNPCs(store: Store): HTMLElement {
   const root = h('div', { id: 'vars-wrap' }); // тот же скролл-контейнер, что у переменных
+  const expanded = new Set<string>(); // id NPC с открытым блоком «Подробнее» (переживает перерисовку)
 
   const mutate = (fn: () => void) => { store.snapshot(); fn(); store.emit('change'); };
 
@@ -196,8 +197,102 @@ export function mountNPCs(store: Store): HTMLElement {
     desc.placeholder = 'Заметки автора: кто это, где встречается…';
     fields.appendChild(desc);
 
+    const isOpen = expanded.has(npc.id);
+    const toggle = h('div', {
+      style: 'cursor:pointer;color:var(--text-faint);font-size:11.5px;letter-spacing:0.5px;user-select:none;',
+      text: isOpen ? '▾ Свернуть профиль' : '▸ Подробнее (профиль персонажа)',
+    });
+    toggle.onclick = () => {
+      if (isOpen) expanded.delete(npc.id); else expanded.add(npc.id);
+      render();
+    };
+    fields.appendChild(toggle);
+    if (isOpen) fields.appendChild(npcProfileFields(npc));
+
     card.appendChild(fields);
     return card;
+  }
+
+  /** Поля глубокого профиля: полноростовой портрет, цитата, характер, связи с другими NPC */
+  function npcProfileFields(npc: NPC): HTMLElement {
+    const wrap = h('div', {
+      style: 'display:flex;flex-direction:column;gap:8px;margin-top:4px;padding-top:8px;border-top:1px solid var(--border);',
+    });
+
+    const fpRow = h('div', { style: 'display:flex;gap:10px;align-items:flex-start;' });
+    const fpImg = h('img', {
+      src: npcFullPortrait(store.project, npc),
+      style: 'width:70px;height:110px;border-radius:6px;object-fit:cover;flex:0 0 auto;background:#05070a;',
+    }) as HTMLImageElement;
+    fpRow.appendChild(fpImg);
+    const fpBtns = h('div', { style: 'display:flex;flex-direction:column;gap:4px;' });
+    const fpUp = h('button', { class: 'btn small', text: '📁 Полноростовой портрет' });
+    fpUp.onclick = async () => {
+      const uri = await pickImageFileCompressed();
+      if (uri) mutate(() => { npc.fullPortrait = uri; });
+    };
+    fpBtns.appendChild(fpUp);
+    if (npc.fullPortrait) {
+      const fpClear = h('button', { class: 'btn small danger-ghost', text: '✕ Убрать' });
+      fpClear.onclick = () => mutate(() => { npc.fullPortrait = undefined; });
+      fpBtns.appendChild(fpClear);
+    }
+    fpBtns.appendChild(h('div', {
+      class: 'hint', style: 'max-width:220px;',
+      text: 'Показывается на экране профиля (клик по портрету в диалоге или вкладка «Персонажи» в журнале). Сжимается автоматически.',
+    }));
+    fpRow.appendChild(fpBtns);
+    wrap.appendChild(fpRow);
+
+    const quote = textInput(npc.quote ?? '', (v) => mutate(() => { npc.quote = v || undefined; }));
+    quote.placeholder = 'Цитата/девиз — задаёт голос персонажа';
+    wrap.appendChild(quote);
+
+    const strengths = textArea(npc.strengths ?? '', (v) => mutate(() => { npc.strengths = v || undefined; }), 2);
+    strengths.placeholder = 'Сильные стороны';
+    wrap.appendChild(strengths);
+
+    const weaknesses = textArea(npc.weaknesses ?? '', (v) => mutate(() => { npc.weaknesses = v || undefined; }), 2);
+    weaknesses.placeholder = 'Слабые стороны';
+    wrap.appendChild(weaknesses);
+
+    const wants = textArea(npc.wants ?? '', (v) => mutate(() => { npc.wants = v || undefined; }), 2);
+    wants.placeholder = 'Желания и мотивация — как искать подход';
+    wrap.appendChild(wants);
+
+    wrap.appendChild(h('div', { style: 'color:var(--text-faint);font-size:11px;margin-top:2px;', text: 'Связи с другими персонажами' }));
+    const relList = h('div', { style: 'display:flex;flex-direction:column;gap:5px;' });
+    const others = (store.project.npcs ?? []).filter((n) => n.id !== npc.id);
+    const rels = npc.relationships ?? [];
+    rels.forEach((rel, i) => {
+      const card = h('div', { class: 'cond-card' });
+      const row = h('div', { class: 'row' });
+      row.appendChild(selectInput(rel.npcId, others.map((n) => [n.id, n.name] as [string, string]), (v) => {
+        const copy = [...rels];
+        copy[i] = { ...rel, npcId: v };
+        mutate(() => { npc.relationships = copy; });
+      }));
+      row.appendChild(textInput(rel.label, (v) => {
+        const copy = [...rels];
+        copy[i] = { ...rel, label: v };
+        mutate(() => { npc.relationships = copy; });
+      }, { placeholder: 'напр. «доверяет», «избегает»' }));
+      const del = h('button', { class: 'del', text: '✕' });
+      del.onclick = () => mutate(() => { npc.relationships = rels.filter((_, j) => j !== i); });
+      row.appendChild(del);
+      card.appendChild(row);
+      relList.appendChild(card);
+    });
+    wrap.appendChild(relList);
+    const addRel = h('button', { class: 'btn small', text: '+ связь' });
+    addRel.onclick = () => {
+      if (others.length === 0) { toast('Сначала создайте ещё одного персонажа', true); return; }
+      const rel: NPCRelationship = { id: uid('rel'), npcId: others[0].id, label: '' };
+      mutate(() => { npc.relationships = [...rels, rel]; });
+    };
+    wrap.appendChild(addRel);
+
+    return wrap;
   }
 
   store.on('change', render);

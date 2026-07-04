@@ -162,3 +162,28 @@ export function npcPortrait(project: Project, npc: NPC): string {
   const faction = project.factions?.find((f) => f.id === npc.factionId);
   return placeholderPortrait(npc.name, faction?.color ?? '#7a8b9a');
 }
+
+/** Полноростовой SVG-силуэт (заглушка для экрана профиля, пока нет собственного арта) → data-URI */
+export function placeholderFullPortrait(name: string, color: string): string {
+  const initials = name.trim().split(/\s+/).map((w) => w[0] ?? '').join('').slice(0, 2).toUpperCase() || '?';
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="600" viewBox="0 0 360 600">
+<defs>
+<radialGradient id="g" cx="50%" cy="30%" r="75%">
+<stop offset="0%" stop-color="#232d37"/><stop offset="100%" stop-color="#0b0f14"/>
+</radialGradient>
+</defs>
+<rect width="360" height="600" fill="url(#g)"/>
+<circle cx="180" cy="185" r="70" fill="#2a333d"/>
+<path d="M70 600 Q80 340 180 340 Q280 340 290 600 Z" fill="#2a333d"/>
+<rect x="0" y="0" width="360" height="600" fill="none" stroke="${color}" stroke-opacity="0.5" stroke-width="3"/>
+<text x="180" y="560" font-family="Segoe UI, sans-serif" font-size="34" font-weight="600"
+ fill="${color}" text-anchor="middle" letter-spacing="3">${initials}</text>
+</svg>`;
+  return 'data:image/svg+xml;utf8,' + encodeURIComponent(svg);
+}
+
+export function npcFullPortrait(project: Project, npc: NPC): string {
+  if (npc.fullPortrait) return npc.fullPortrait;
+  const faction = project.factions?.find((f) => f.id === npc.factionId);
+  return placeholderFullPortrait(npc.name, faction?.color ?? '#7a8b9a');
+}

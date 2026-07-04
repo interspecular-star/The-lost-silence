@@ -188,6 +188,42 @@ export function pickImageFile(): Promise<string | null> {
   });
 }
 
+/**
+ * Выбор изображения с клиентским сжатием (даунскейл + перекодирование в WebP) — для
+ * крупных картинок вроде полноростовых портретов, которые иначе сильно раздували бы
+ * автосейв и экспорт игры (data-URI встраиваются напрямую в JSON/HTML).
+ */
+export function pickImageFileCompressed(maxHeight = 1000, quality = 0.85): Promise<string | null> {
+  return new Promise((resolve) => {
+    const input = h('input', { type: 'file', accept: 'image/*' }) as HTMLInputElement;
+    input.onchange = () => {
+      const file = input.files?.[0];
+      if (!file) { resolve(null); return; }
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, maxHeight / img.height);
+          const w = Math.max(1, Math.round(img.width * scale));
+          const hgt = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = w;
+          canvas.height = hgt;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) { resolve(String(reader.result)); return; }
+          ctx.drawImage(img, 0, 0, w, hgt);
+          resolve(canvas.toDataURL('image/webp', quality));
+        };
+        img.onerror = () => { toast('Не удалось прочитать изображение', true); resolve(null); };
+        img.src = String(reader.result);
+      };
+      reader.onerror = () => { toast('Не удалось прочитать файл', true); resolve(null); };
+      reader.readAsDataURL(file);
+    };
+    input.click();
+  });
+}
+
 /** Строка инспектора: подпись + контрол */
 export function row(label: string, control: HTMLElement): HTMLElement {
   const r = h('div', { class: 'insp-row' });

@@ -5,6 +5,7 @@
 
 import { QuestDef, UpgradeDef, CANVAS_W } from '../core/types';
 import { heroVarId, itemIcon } from '../core/hero';
+import { npcPortrait } from '../core/npc';
 import type { Engine } from './engine';
 
 /** Ключ сброса: суточные — дата, недельные — год-неделя (понедельник), сюжетные — 'once' */
@@ -29,7 +30,8 @@ export function upgradeCost(up: UpgradeDef, level: number): number {
 
 export function renderJournal(engine: Engine, layer: HTMLElement, close: () => void) {
   const p = engine.project;
-  let tab: 'quests' | 'upgrades' | 'oldnet' = 'quests';
+  const hasCharacters = (p.npcs?.length ?? 0) > 0;
+  let tab: 'quests' | 'upgrades' | 'oldnet' | 'characters' = 'quests';
 
   const backdrop = document.createElement('div');
   backdrop.style.cssText = `position:absolute;inset:0;background:rgba(2,4,6,0.72);
@@ -61,8 +63,9 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
   const head = document.createElement('div');
   head.style.cssText = `display:flex;align-items:flex-end;gap:1.8em;
     border-bottom:1px solid rgba(255,255,255,0.07);`;
-  const tabs: ['quests' | 'upgrades' | 'oldnet', string][] = [
+  const tabs: ['quests' | 'upgrades' | 'oldnet' | 'characters', string][] = [
     ['quests', 'КВЕСТЫ'], ['upgrades', 'УЛУЧШЕНИЯ'], ['oldnet', 'АРХИВ OLDNET'],
+    ...(hasCharacters ? [['characters', 'ПЕРСОНАЖИ'] as ['characters', string]] : []),
   ];
   const tabEls = new Map<string, HTMLElement>();
   for (const [key, label] of tabs) {
@@ -340,6 +343,56 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
     }
   }
 
+  // ---------- вкладка: персонажи ----------
+  function renderCharacters() {
+    const npcs = p.npcs ?? [];
+    if (npcs.length === 0) {
+      body.appendChild(hint('Персонажей в проекте пока нет.'));
+      return;
+    }
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(15em,1fr));gap:0.7em;';
+    for (const npc of npcs) {
+      const met = engine.state[npc.metVarId] === true;
+      const faction = npc.factionId ? p.factions?.find((f) => f.id === npc.factionId) : undefined;
+      const c = card(met ? faction?.color : undefined);
+      c.style.flexDirection = 'column';
+      c.style.alignItems = 'flex-start';
+      c.style.gap = '0.5em';
+      if (met) {
+        c.style.cursor = 'pointer';
+        c.onclick = () => engine.openCharacterProfile(npc.id);
+        c.onmouseenter = () => { c.style.background = 'rgba(255,255,255,0.035)'; };
+        c.onmouseleave = () => { c.style.background = 'rgba(255,255,255,0.015)'; };
+      } else {
+        c.style.opacity = '0.5';
+      }
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:0.8em;width:100%;';
+      const img = document.createElement('img');
+      img.src = met ? npcPortrait(p, npc) : npcPortrait(p, { ...npc, portrait: undefined, factionId: null, name: '?' });
+      img.style.cssText = `width:2.8em;height:2.8em;border-radius:50%;flex:0 0 auto;
+        border:1px solid ${met ? (faction?.color ?? '#5f7a8a') : '#3d4a56'}55;`;
+      row.appendChild(img);
+      const info = document.createElement('div');
+      info.style.cssText = 'min-width:0;';
+      const name = document.createElement('div');
+      name.textContent = met ? npc.name : '??? — не встречен(а)';
+      name.style.cssText = 'font-weight:400;color:#e6edf3;';
+      info.appendChild(name);
+      if (met && faction) {
+        const fn = document.createElement('div');
+        fn.textContent = faction.name;
+        fn.style.cssText = `font-size:0.68em;letter-spacing:2px;text-transform:uppercase;color:${faction.color};margin-top:0.15em;`;
+        info.appendChild(fn);
+      }
+      row.appendChild(info);
+      c.appendChild(row);
+      grid.appendChild(c);
+    }
+    body.appendChild(grid);
+  }
+
   /** Оверлей «кусок правды» — терминал OldNet (скан-линии, амбер-сбой) */
   function showTruth(title: string, text: string) {
     const o = document.createElement('div');
@@ -444,6 +497,7 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
     body.innerHTML = '';
     if (tab === 'quests') renderQuests();
     else if (tab === 'upgrades') renderUpgrades();
+    else if (tab === 'characters') renderCharacters();
     else renderOldnet();
   }
 

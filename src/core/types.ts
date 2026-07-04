@@ -224,13 +224,26 @@ export interface Faction {
   skinId?: FactionSkinId;    // оформление диалогового блока; нет — как сейчас (нейтральная тема)
 }
 
+/** Связь с другим NPC для экрана профиля персонажа */
+export interface NPCRelationship {
+  id: string;
+  npcId: string;   // на кого ссылается связь
+  label: string;   // напр. «доверяет», «старый друг», «избегает»
+}
+
 export interface NPC {
   id: string;
   name: string;
   factionId: string | null;  // null — вне фракций
   weight: number;            // вес влияния 1..10 (учитывается при repMode:'weighted')
-  portrait?: string;         // data-URI; если нет — генерируется силуэт с инициалами
-  description?: string;
+  portrait?: string;         // круглый аватар в диалогах; data-URI, иначе — силуэт с инициалами
+  fullPortrait?: string;     // полноростовой арт для экрана профиля персонажа
+  quote?: string;            // короткая цитата/девиз — сразу задаёт голос персонажа
+  description?: string;      // краткое досье (для редактора)
+  strengths?: string;        // сильные стороны — экран профиля
+  weaknesses?: string;       // слабые стороны — экран профиля
+  wants?: string;            // желания/мотивация — как искать подход
+  relationships?: NPCRelationship[]; // связи с другими NPC
   relationVarId: string;     // авто-переменная category:'npc' — отношение 0..100
   metVarId: string;          // авто-переменная category:'npc' — знаком ли игрок (boolean)
 }
