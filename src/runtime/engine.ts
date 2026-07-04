@@ -7,11 +7,12 @@
 import {
   Project, Scene, SceneElement, Dialogue, DialogueNode,
   Condition, Effect, VarValue, CANVAS_W, CANVAS_H,
-  ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, RARITY_META, STAT_LABELS,
+  ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, RARITY_META, Rarity, STAT_LABELS,
   PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule,
 } from '../core/types';
 import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
+import { ensureUiFxStyles } from './uifx';
 import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -87,6 +88,7 @@ export class Engine {
   equipment: Partial<Record<ItemSlot, string>> = {};
   private invOpen = false;
   private notices: HTMLElement[] = [];
+  private achievementPopups: HTMLElement[] = [];
   /** true во время боя — реген приостановлен */
   inCombat = false;
   private dialogueActive = false;
@@ -118,6 +120,7 @@ export class Engine {
 
     ensureBgFxStyles();
     ensureDialogueFxStyles();
+    ensureUiFxStyles();
     this.bgLayer = document.createElement('div');
     this.bgLayer.style.cssText = 'position:absolute;inset:0;';
     this.buildBgChain();
@@ -646,7 +649,7 @@ export class Engine {
       unlocked = true;
       if (a.rewardEffects?.length) this.applyEffects(a.rewardEffects);
       if (a.rewardItems?.length) this.giveItems(a.rewardItems);
-      if (!silent) this.notify(`🏆 ${a.title}`, '#f4d35e');
+      if (!silent) this.notifyAchievement(a.title, a.icon || '🏆');
     }
     if (unlocked) this.scheduleSave();
   }
@@ -702,9 +705,9 @@ export class Engine {
 
   // ---------- HUD ----------
   private renderHUD() {
-    // не трогаем всплывающие уведомления
+    // не трогаем всплывающие уведомления и баннеры ачивок
     [...this.hudLayer.children].forEach((c) => {
-      if (!this.notices.includes(c as HTMLElement)) c.remove();
+      if (!this.notices.includes(c as HTMLElement) && !this.achievementPopups.includes(c as HTMLElement)) c.remove();
     });
     this.renderHeroHUD();
     this.renderOskolokHUD();
@@ -1062,6 +1065,35 @@ export class Engine {
     });
   }
 
+  /** Праздничный баннер разблокировки ачивки — заметнее обычного notify() */
+  private notifyAchievement(title: string, icon: string) {
+    const n = document.createElement('div');
+    n.className = 'tls-ach-popup';
+    n.style.fontSize = `calc(24 * 100cqw / ${CANVAS_W})`;
+    const ic = document.createElement('div');
+    ic.className = 'tls-ach-icon';
+    ic.textContent = icon;
+    n.appendChild(ic);
+    const txt = document.createElement('div');
+    const kicker = document.createElement('div');
+    kicker.className = 'tls-ach-kicker';
+    kicker.textContent = 'ДОСТИЖЕНИЕ';
+    txt.appendChild(kicker);
+    const t = document.createElement('div');
+    t.className = 'tls-ach-title';
+    t.textContent = title;
+    txt.appendChild(t);
+    n.appendChild(txt);
+    this.hudLayer.appendChild(n);
+    // renderHUD() подчищает hudLayer от всего, что не отслежено — регистрируем отдельно
+    // от notices (у баннера своя, статичная позиция — layoutNotices() её не должен трогать)
+    this.achievementPopups.push(n);
+    setTimeout(() => {
+      n.remove();
+      this.achievementPopups = this.achievementPopups.filter((x) => x !== n);
+    }, 3600);
+  }
+
   // ---------- диалоги ----------
   startDialogue(id: string) {
     const dlg = this.project.dialogues.find((d) => d.id === id);
@@ -1269,8 +1301,11 @@ export class Engine {
       btn.className = 'dchoice';
       btn.style.cssText = `background:${t.choiceBg};color:${t.choiceText};
         padding:0.5em 1em 0.5em 0.9em;cursor:pointer;display:flex;gap:0.8em;
-        align-items:baseline;border-left:2px solid transparent;
+        align-items:baseline;border-left:2px solid transparent;position:relative;overflow:hidden;
         transition:background .15s,border-color .15s;`;
+      const sheen = document.createElement('div');
+      sheen.className = 'dchoice-sheen';
+      btn.appendChild(sheen);
       const mark = document.createElement('span');
       mark.style.cssText = 'flex:0 0 1em;font-size:0.7em;';
       if (delta > 0) { mark.textContent = '▲'; mark.style.color = '#98c379'; }
@@ -1283,6 +1318,9 @@ export class Engine {
       btn.onmouseenter = () => {
         btn.style.background = t.choiceHover;
         btn.style.borderLeftColor = 'var(--dbox-border-accent)';
+        sheen.classList.remove('play');
+        void sheen.offsetWidth; // форс-reflow — блик переигрывается при каждом наведении
+        sheen.classList.add('play');
       };
       btn.onmouseleave = () => {
         btn.style.background = t.choiceBg;
@@ -1591,6 +1629,14 @@ export class Engine {
     body.appendChild(right);
   }
 
+  /** Диагональный переливающийся блик поверх редких предметов (legendary/archon) */
+  private addRarityShine(cell: HTMLElement, rarity: Rarity) {
+    if (rarity !== 'legendary' && rarity !== 'archon') return;
+    const shine = document.createElement('div');
+    shine.className = 'tls-item-shine';
+    cell.appendChild(shine);
+  }
+
   private slotCell(slot: ItemSlot): HTMLElement {
     const cell = document.createElement('div');
     cell.dataset.slot = slot;
@@ -1616,6 +1662,7 @@ export class Engine {
       cell.title = this.itemTooltip(def) + '\nКлик — снять';
       cell.style.cursor = 'pointer';
       cell.onclick = () => this.unequipSlot(slot);
+      this.addRarityShine(cell, def.rarity);
     } else {
       const lbl = document.createElement('div');
       lbl.textContent = ITEM_SLOT_LABELS[slot];
@@ -1643,6 +1690,7 @@ export class Engine {
     img.style.cssText = 'width:78%;height:78%;border-radius:0.3em;pointer-events:none;';
     img.draggable = false;
     cell.appendChild(img);
+    this.addRarityShine(cell, def.rarity);
     if (item.qty > 1) {
       const q = document.createElement('div');
       q.textContent = String(item.qty);
