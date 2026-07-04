@@ -5,7 +5,7 @@
 
 import { Store } from '../core/store';
 import {
-  SceneElement, ElementType, Guide, uid,
+  Scene, SceneElement, ElementType, Guide, uid,
   CANVAS_W, CANVAS_H, ELEMENT_TYPE_LABELS,
 } from '../core/types';
 import { h } from './ui';
@@ -259,6 +259,31 @@ export class StageView {
     }
   }
 
+  /** Живой предпросмотр базовых настроек фона (без условных эффектов — те видны только в F5) */
+  private renderBgPreview(scene: Scene): HTMLElement {
+    const cfg = scene.bg ?? {};
+    const opacity = (cfg.opacity ?? 100) / 100;
+    const brightness = cfg.brightness ?? 100;
+    const contrast = cfg.contrast ?? 100;
+    const blur = cfg.blur ?? 0;
+    const posX = cfg.posX ?? 50;
+    const posY = cfg.posY ?? 50;
+    const scale = (cfg.scale ?? 100) / 100;
+
+    const wrap = h('div', { style: 'position:absolute;inset:0;overflow:hidden;' });
+    const img = h('div', {
+      style: `position:absolute;inset:-10%;background-size:cover;
+        background-position:${posX}% ${posY}%;
+        transform:scale(${scale});opacity:${opacity};
+        filter:brightness(${brightness}%) contrast(${contrast}%)${blur ? ` blur(${blur}px)` : ''};`,
+    });
+    img.style.background = scene.background;
+    if (scene.bgImage) img.style.backgroundImage = `url(${scene.bgImage})`;
+    else img.style.backgroundImage = scene.background.includes('gradient') ? scene.background : 'none';
+    wrap.appendChild(img);
+    return wrap;
+  }
+
   // ---------- рендер холста ----------
   renderCanvas() {
     const scene = this.store.currentScene;
@@ -267,14 +292,8 @@ export class StageView {
       this.canvas.style.background = '#000';
       return;
     }
-    this.canvas.style.background = scene.background;
-    if (scene.bgImage) {
-      this.canvas.style.backgroundImage = `url(${scene.bgImage})`;
-      this.canvas.style.backgroundSize = 'cover';
-      this.canvas.style.backgroundPosition = 'center';
-    } else {
-      this.canvas.style.backgroundImage = scene.background.includes('gradient') ? scene.background : 'none';
-    }
+    this.canvas.style.background = '#000';
+    this.canvas.appendChild(this.renderBgPreview(scene));
 
     const sorted = [...scene.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     for (const el of sorted) {

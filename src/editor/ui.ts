@@ -110,6 +110,29 @@ export function numberInput(
   return input;
 }
 
+export function rangeInput(
+  value: number,
+  min: number,
+  max: number,
+  step: number,
+  onInput: (v: number) => void,
+): HTMLElement {
+  const wrap = h('div', { class: 'range-row' });
+  const input = h('input', {
+    class: 'ed-range', type: 'range',
+    min: String(min), max: String(max), step: String(step),
+  }) as HTMLInputElement;
+  input.value = String(value);
+  const label = h('span', { class: 'range-val', text: String(value) });
+  input.oninput = () => {
+    const n = parseFloat(input.value);
+    label.textContent = String(n);
+    onInput(n);
+  };
+  wrap.append(input, label);
+  return wrap;
+}
+
 export function textArea(value: string, onCommit: (v: string) => void, rows = 4): HTMLTextAreaElement {
   const ta = h('textarea', { class: 'ed', rows: String(rows) }) as HTMLTextAreaElement;
   ta.value = value;

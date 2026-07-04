@@ -8,8 +8,9 @@ import {
   Project, Scene, SceneElement, Dialogue, DialogueNode,
   Condition, Effect, VarValue, CANVAS_W, CANVAS_H,
   ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, RARITY_META, STAT_LABELS,
-  PlaytestCheckpoint, uid, deepClone,
+  PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule,
 } from '../core/types';
+import { ensureBgFxStyles } from './bgfx';
 import { materializeFactionReps, computeFactionRep, npcPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -54,6 +55,31 @@ export class Engine {
   private invLayer!: HTMLElement;
   private factionPanelOpen = false;
 
+  // фон: постоянные слои (не пересоздаются при рендере сцены — иначе дёргались бы анимации)
+  private bgLayer!: HTMLElement;
+  private bgZoomEl!: HTMLElement;
+  private bgParallaxEl!: HTMLElement;
+  private bgKbEl!: HTMLElement;
+  private bgDriftEl!: HTMLElement;
+  private bgShakeEl!: HTMLElement;
+  private bgGlitchEl!: HTMLElement;
+  private bgImgEl!: HTMLElement;
+  private bgFxEl!: HTMLElement;
+  private bgOverlayEls: Partial<Record<BgEffectType, HTMLElement>> = {};
+  private bgBaseFilter = '';
+  private bgParallaxStrength = 0;
+  private onBgPointerMove = (e: PointerEvent) => {
+    if (!this.bgParallaxEl) return;
+    if (!this.bgParallaxStrength) { this.bgParallaxEl.style.transform = ''; return; }
+    const rect = this.root.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const dx = (e.clientX - rect.left) / rect.width - 0.5;
+    const dy = (e.clientY - rect.top) / rect.height - 0.5;
+    const maxShift = 3; // % — в пределах 10% запаса на bgImgEl
+    const k = this.bgParallaxStrength / 100;
+    this.bgParallaxEl.style.transform = `translate(${(-dx * k * maxShift).toFixed(2)}%, ${(-dy * k * maxShift).toFixed(2)}%)`;
+  };
+
   // инвентарь и экипировка
   inventory: InvCell[] = [];
   equipment: Partial<Record<ItemSlot, string>> = {};
@@ -84,6 +110,11 @@ export class Engine {
     root.style.overflow = 'hidden';
     root.style.fontFamily = project.theme.font;
 
+    ensureBgFxStyles();
+    this.bgLayer = document.createElement('div');
+    this.bgLayer.style.cssText = 'position:absolute;inset:0;';
+    this.buildBgChain();
+
     this.sceneLayer = document.createElement('div');
     this.sceneLayer.style.cssText = 'position:absolute;inset:0;';
     this.hudLayer = document.createElement('div');
@@ -94,10 +125,12 @@ export class Engine {
     this.invLayer = document.createElement('div');
     this.invLayer.style.cssText = `position:absolute;inset:0;pointer-events:none;
       font-size:calc(26 * 100cqw / ${CANVAS_W});`;
+    root.appendChild(this.bgLayer);
     root.appendChild(this.sceneLayer);
     root.appendChild(this.hudLayer);
     root.appendChild(this.dialogueLayer);
     root.appendChild(this.invLayer);
+    root.addEventListener('pointermove', this.onBgPointerMove);
 
     for (const v of project.variables) this.state[v.id] = v.initial;
     this.recomputeDerived();
@@ -210,6 +243,139 @@ export class Engine {
     this.destroyed = true;
     clearInterval(this.tickTimer);
     clearTimeout(this.saveTimer);
+    this.root.removeEventListener('pointermove', this.onBgPointerMove);
+  }
+
+  // ---------- фон: постоянные слои + условные эффекты ----------
+  /** Создаёт цепочку слоёв фона один раз. Пересоздавать нельзя — иначе анимации будут дёргаться. */
+  private buildBgChain() {
+    const mk = (css: string, cls = '') => {
+      const d = document.createElement('div');
+      d.style.cssText = css;
+      if (cls) d.className = cls;
+      return d;
+    };
+    const bgRoot = mk('position:absolute;inset:0;overflow:hidden;');
+    const zoom = mk('position:absolute;inset:0;transition:transform .4s ease;');
+    const parallax = mk('position:absolute;inset:0;transition:transform .12s linear;');
+    const kb = mk('position:absolute;inset:0;', 'tls-bgw-kb');
+    const drift = mk('position:absolute;inset:0;', 'tls-bgw-drift');
+    const shake = mk('position:absolute;inset:0;', 'tls-bgw-shake');
+    const glitch = mk('position:absolute;inset:0;', 'tls-bgw-glitch');
+    const img = mk('position:absolute;inset:-10%;background-size:cover;transition:filter .5s ease, opacity .5s ease;');
+
+    glitch.appendChild(img);
+    shake.appendChild(glitch);
+    drift.appendChild(shake);
+    kb.appendChild(drift);
+    parallax.appendChild(kb);
+    zoom.appendChild(parallax);
+    bgRoot.appendChild(zoom);
+
+    const fx = mk('position:absolute;inset:0;pointer-events:none;');
+
+    this.bgLayer.appendChild(bgRoot);
+    this.bgLayer.appendChild(fx);
+
+    this.bgZoomEl = zoom;
+    this.bgParallaxEl = parallax;
+    this.bgKbEl = kb;
+    this.bgDriftEl = drift;
+    this.bgShakeEl = shake;
+    this.bgGlitchEl = glitch;
+    this.bgImgEl = img;
+    this.bgFxEl = fx;
+  }
+
+  /** Базовые настройки картинки (прозрачность/яркость/контраст/blur/положение/масштаб/параллакс) */
+  private applyBackgroundConfig(scene: Scene) {
+    const cfg = scene.bg ?? {};
+    const opacity = (cfg.opacity ?? 100) / 100;
+    const brightness = cfg.brightness ?? 100;
+    const contrast = cfg.contrast ?? 100;
+    const blur = cfg.blur ?? 0;
+    const posX = cfg.posX ?? 50;
+    const posY = cfg.posY ?? 50;
+    const scale = (cfg.scale ?? 100) / 100;
+    this.bgParallaxStrength = cfg.parallax ?? 0;
+
+    this.bgImgEl.style.background = scene.background;
+    if (scene.bgImage) this.bgImgEl.style.backgroundImage = `url(${scene.bgImage})`;
+    this.bgImgEl.style.backgroundSize = 'cover';
+    this.bgImgEl.style.backgroundPosition = `${posX}% ${posY}%`;
+    this.bgImgEl.style.opacity = String(opacity);
+    this.bgZoomEl.style.transform = scale !== 1 ? `scale(${scale})` : '';
+
+    this.bgBaseFilter = `brightness(${brightness}%) contrast(${contrast}%)${blur ? ` blur(${blur}px)` : ''}`;
+    this.bgImgEl.style.filter = this.bgBaseFilter;
+    if (!this.bgParallaxStrength) this.bgParallaxEl.style.transform = '';
+  }
+
+  /** Пересчитывает условные эффекты (зависят от переменных) без пересоздания анимированных слоёв */
+  private refreshBgEffects(scene: Scene) {
+    const rules = (scene.bgEffects ?? []).filter((r) => this.checkConditions(r.conditions));
+    const active = new Map<BgEffectType, BgEffectRule>();
+    for (const r of rules) active.set(r.type, r); // при дублях побеждает последнее правило в списке
+
+    const setWrap = (el: HTMLElement, type: BgEffectType) => {
+      const rule = active.get(type);
+      el.classList.toggle('tls-fx-on', !!rule);
+      if (rule) el.style.setProperty('--fx-i', String(rule.intensity / 100));
+    };
+    setWrap(this.bgKbEl, 'kenBurns');
+    setWrap(this.bgDriftEl, 'drift');
+    setWrap(this.bgShakeEl, 'shake');
+    setWrap(this.bgGlitchEl, 'glitch');
+
+    let filter = this.bgBaseFilter;
+    const desat = active.get('desaturate');
+    if (desat) filter += ` grayscale(${desat.intensity}%)`;
+    const hb = active.get('heavyBlur');
+    if (hb) filter += ` blur(${((hb.intensity / 100) * 14).toFixed(1)}px)`;
+    this.bgImgEl.style.filter = filter;
+
+    const overlayTypes: BgEffectType[] = ['vignette', 'tint', 'scanlines', 'staticNoise', 'grain', 'pulse', 'flicker', 'redPulse', 'chromaShift'];
+    for (const type of overlayTypes) {
+      const rule = active.get(type);
+      let el = this.bgOverlayEls[type];
+      if (!rule) {
+        if (el) { el.remove(); delete this.bgOverlayEls[type]; }
+        continue;
+      }
+      if (!el) {
+        el = this.buildOverlayEl(type);
+        this.bgOverlayEls[type] = el;
+        this.bgFxEl.appendChild(el);
+      }
+      el.style.setProperty('--fx-i', String(rule.intensity / 100));
+      if (rule.color) el.style.setProperty('--fx-color', rule.color);
+      if (type === 'chromaShift') this.updateChromaLayers(el);
+    }
+  }
+
+  private buildOverlayEl(type: BgEffectType): HTMLElement {
+    if (type === 'chromaShift') {
+      const wrap = document.createElement('div');
+      wrap.className = 'tls-bgfx-chroma';
+      const red = document.createElement('div');
+      red.className = 'tls-bgfx-chroma-layer tls-bgfx-chroma-r';
+      const cyan = document.createElement('div');
+      cyan.className = 'tls-bgfx-chroma-layer tls-bgfx-chroma-c';
+      wrap.append(red, cyan);
+      return wrap;
+    }
+    const d = document.createElement('div');
+    d.className = `tls-bgfx-${type === 'staticNoise' ? 'noise' : type}`;
+    return d;
+  }
+
+  private updateChromaLayers(wrap: HTMLElement) {
+    const bgImage = this.bgImgEl.style.backgroundImage;
+    const bgPos = this.bgImgEl.style.backgroundPosition;
+    wrap.querySelectorAll<HTMLElement>('.tls-bgfx-chroma-layer').forEach((l) => {
+      l.style.backgroundImage = bgImage;
+      l.style.backgroundPosition = bgPos;
+    });
   }
 
   // ---------- уровни ----------
@@ -241,12 +407,14 @@ export class Engine {
   private startIdleTicks() {
     const rules = this.project.idleRules?.filter((r) => r.enabled) ?? [];
     const hasChains = (this.project.quests ?? []).some((q) => q.enabled && q.steps?.length);
-    if (rules.length === 0 && !this.heroEnabled && !hasChains) return;
+    const hasBgEffects = this.project.scenes.some((s) => s.bgEffects?.length);
+    if (rules.length === 0 && !this.heroEnabled && !hasChains && !hasBgEffects) return;
     this.tickTimer = window.setInterval(() => {
       if (this.destroyed) return;
       this.applyIdle(1 / 60, false); // тик раз в секунду
       this.regenTick();
       this.checkQuestSteps();
+      if (this.currentScene) this.refreshBgEffects(this.currentScene);
     }, 1000);
   }
 
@@ -465,12 +633,8 @@ export class Engine {
     const scene = this.currentScene;
     if (!scene) return;
     this.sceneLayer.innerHTML = '';
-    this.sceneLayer.style.background = scene.background;
-    if (scene.bgImage) {
-      this.sceneLayer.style.backgroundImage = `url(${scene.bgImage})`;
-      this.sceneLayer.style.backgroundSize = 'cover';
-      this.sceneLayer.style.backgroundPosition = 'center';
-    }
+    this.applyBackgroundConfig(scene);
+    this.refreshBgEffects(scene);
 
     const sorted = [...scene.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     for (const el of sorted) {

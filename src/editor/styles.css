@@ -208,6 +208,13 @@ input.ed[type='number'] { font-family: var(--mono); }
 .btn.small { padding: 3px 8px; font-size: 11.5px; }
 .btn.block { width: 100%; }
 
+.range-row { display: flex; align-items: center; gap: 8px; width: 100%; }
+.range-row .ed-range { flex: 1; accent-color: var(--accent); min-width: 0; }
+.range-row .range-val {
+  width: 2.8em; text-align: right; color: var(--text-faint);
+  font-size: 11px; font-family: var(--mono); flex: none;
+}
+
 .hint { color: var(--text-faint); font-size: 11.5px; line-height: 1.5; padding: 4px 0; }
 
 /* карточки условий/эффектов */

@@ -106,10 +106,57 @@ export interface Scene {
   kind: SceneKind;
   background: string;      // css-цвет или градиент
   bgImage?: string;
+  bg?: SceneBackgroundAdjust;
+  bgEffects?: BgEffectRule[];
   elements: SceneElement[];
   guides: Guide[];
   onEnterDialogueId?: string; // диалог, запускаемый при входе в сцену
   hudMode?: 'auto' | 'on' | 'off'; // 'auto' — HUD скрыт на страницах, показан на локациях/уровнях
+}
+
+// ---------- Настройка фонового изображения ----------
+/** Базовая настройка картинки фона (всегда применяется, не зависит от условий) */
+export interface SceneBackgroundAdjust {
+  opacity?: number;     // 0-100, по умолчанию 100
+  brightness?: number;  // 0-200, по умолчанию 100
+  contrast?: number;    // 0-200, по умолчанию 100
+  blur?: number;        // 0-20 (px), по умолчанию 0
+  posX?: number;        // 0-100 (%), по умолчанию 50
+  posY?: number;        // 0-100 (%), по умолчанию 50
+  scale?: number;       // 100-200 (%), по умолчанию 100 — запас на параллакс/дрейф
+  parallax?: number;    // -100..100, по умолчанию 0 — сила слежения за курсором (знак = направление)
+}
+
+/** Условный визуальный эффект поверх фона (настроение/напряжение/сбои и т.п.) */
+export type BgEffectType =
+  | 'vignette' | 'tint' | 'kenBurns' | 'shake' | 'pulse' | 'flicker' | 'glitch'
+  | 'scanlines' | 'staticNoise' | 'grain' | 'desaturate' | 'chromaShift'
+  | 'heavyBlur' | 'drift' | 'redPulse';
+
+export const BG_EFFECT_META: Record<BgEffectType, { label: string; hasColor?: boolean; hint: string }> = {
+  vignette: { label: 'Виньетка', hint: 'Затемнение по краям — фокус на центре/тексте.' },
+  tint: { label: 'Цветной оттенок', hasColor: true, hint: 'Полупрозрачный цвет поверх фона — быстрая смена настроения.' },
+  kenBurns: { label: 'Дыхание (медленный зум)', hint: 'Плавный зум туда-обратно — оживляет статичную картинку.' },
+  shake: { label: 'Тряска', hint: 'Быстрая дрожь экрана — удар, тревога, бой.' },
+  pulse: { label: 'Пульсация яркости', hint: 'Мягкое биение свет/тень — волнение, сердцебиение.' },
+  flicker: { label: 'Мерцание', hint: 'Неровные скачки яркости — нестабильность, авария освещения.' },
+  glitch: { label: 'Цифровой сбой', hint: 'Рывки и сдвиги картинки — вмешательство Mesh/OldNet.' },
+  scanlines: { label: 'Строки сканирования', hint: 'Бегущие горизонтальные линии — терминал, экран, OldNet.' },
+  staticNoise: { label: 'Помехи', hint: 'Плотный шум — потеря сигнала, провал восприятия.' },
+  grain: { label: 'Зернистость', hint: 'Лёгкое киношное зерно — тревожная, «плёночная» атмосфера.' },
+  desaturate: { label: 'Обесцвечивание', hint: 'Уход цвета в серость — апатия, шок, потеря чувств.' },
+  chromaShift: { label: 'Хроматический сдвиг', hint: 'Цветной «разъезд» картинки — головокружение, дезориентация.' },
+  heavyBlur: { label: 'Сильное размытие', hint: 'Глубокая расфокусировка — потеря сознания, засыпание.' },
+  drift: { label: 'Дрейф', hint: 'Медленное покачивание фона — невесомость, сон, вода.' },
+  redPulse: { label: 'Красная пульсация', hint: 'Пульсирующий красный — урон, опасность, критическое состояние.' },
+};
+
+export interface BgEffectRule {
+  id: string;
+  type: BgEffectType;
+  intensity: number;        // 0-100
+  color?: string;           // для tint
+  conditions: Condition[];  // все условия истинны (И); пусто — эффект активен всегда
 }
 
 // ---------- Диалоги (нодовый граф) ----------

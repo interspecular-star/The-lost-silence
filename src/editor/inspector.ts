@@ -6,11 +6,12 @@ import { Store } from '../core/store';
 import {
   SceneElement, DialogueNode, Condition, Effect, VarValue,
   ELEMENT_TYPE_LABELS, NODE_TYPE_LABELS, SCENE_KIND_LABELS, uid,
+  BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
 } from '../core/types';
 import { duplicateElement } from '../core/store';
 import {
   h, row, field, section, textInput, numberInput, textArea,
-  selectInput, checkbox, toast, pickImageFile,
+  selectInput, checkbox, toast, pickImageFile, rangeInput,
 } from './ui';
 
 export function mountInspector(root: HTMLElement, store: Store) {
@@ -127,6 +128,27 @@ export function mountInspector(root: HTMLElement, store: Store) {
       ...(scene.bgImage ? [bgClear] : []),
     ));
 
+    const bg = scene.bg ?? {};
+    const bgAdjust = <K extends keyof SceneBackgroundAdjust>(key: K, v: number) => mutate(() => {
+      scene.bg = { ...(scene.bg ?? {}), [key]: v };
+    });
+    root.appendChild(section('Настройка изображения',
+      row('Прозрачность', rangeInput(bg.opacity ?? 100, 0, 100, 1, (v) => bgAdjust('opacity', v))),
+      row('Яркость', rangeInput(bg.brightness ?? 100, 0, 200, 1, (v) => bgAdjust('brightness', v))),
+      row('Контраст', rangeInput(bg.contrast ?? 100, 0, 200, 1, (v) => bgAdjust('contrast', v))),
+      row('Размытие', rangeInput(bg.blur ?? 0, 0, 20, 0.5, (v) => bgAdjust('blur', v))),
+      row('Положение X', rangeInput(bg.posX ?? 50, 0, 100, 1, (v) => bgAdjust('posX', v))),
+      row('Положение Y', rangeInput(bg.posY ?? 50, 0, 100, 1, (v) => bgAdjust('posY', v))),
+      row('Масштаб', rangeInput(bg.scale ?? 100, 100, 200, 1, (v) => bgAdjust('scale', v))),
+      row('Параллакс', rangeInput(bg.parallax ?? 0, -100, 100, 1, (v) => bgAdjust('parallax', v))),
+      h('div', {
+        class: 'hint',
+        text: 'Параллакс сдвигает фон за курсором в предпросмотре/игре: положительное значение — обычный (фон «плывёт» позади), отрицательное — обратный (фон тянется к курсору). Масштаб и параллакс видны только в F5, не на холсте.',
+      }),
+    ));
+
+    root.appendChild(bgEffectsSection(scene));
+
     const dlgOptions: [string, string][] = [['', '— нет —'], ...store.project.dialogues.map((d) => [d.id, d.name] as [string, string])];
     root.appendChild(section('При входе в сцену',
       row('Диалог', selectInput(scene.onEnterDialogueId ?? '', dlgOptions,
@@ -174,6 +196,45 @@ export function mountInspector(root: HTMLElement, store: Store) {
     color.onchange = () => onChange(color.value);
     wrap.append(color, text);
     return wrap;
+  }
+
+  const BG_EFFECT_OPTIONS: [string, string][] = Object.entries(BG_EFFECT_META).map(([k, m]) => [k, m.label]);
+
+  function bgEffectsSection(scene: Scene): HTMLElement {
+    const rules = scene.bgEffects ?? [];
+    const list = h('div');
+    rules.forEach((rule, i) => {
+      const meta = BG_EFFECT_META[rule.type];
+      const card = h('div', { class: 'cond-card' });
+      const typeRow = h('div', { class: 'row' });
+      typeRow.appendChild(selectInput(rule.type, BG_EFFECT_OPTIONS, (v) => mutate(() => {
+        rule.type = v as BgEffectType;
+        if (BG_EFFECT_META[rule.type].hasColor && !rule.color) rule.color = '#3a6ea5';
+      })));
+      const del = h('button', { class: 'del', text: '✕', title: 'Удалить эффект' });
+      del.onclick = () => mutate(() => { scene.bgEffects = rules.filter((_, j) => j !== i); });
+      typeRow.appendChild(del);
+      card.appendChild(typeRow);
+      card.appendChild(h('div', { class: 'hint', text: meta.hint }));
+      card.appendChild(row('Сила', rangeInput(rule.intensity, 0, 100, 1, (v) => mutate(() => { rule.intensity = v; }))));
+      if (meta.hasColor) {
+        card.appendChild(row('Цвет', colorRow(rule.color ?? '#3a6ea5', (v) => mutate(() => { rule.color = v; }))));
+      }
+      card.appendChild(h('div', { class: 'hint', text: 'Условия (пусто — эффект активен всегда):' }));
+      card.appendChild(conditionsEditor(rule.conditions, (list2) => mutate(() => { rule.conditions = list2; })));
+      list.appendChild(card);
+    });
+    const add = h('button', { class: 'btn small', text: '+ эффект' });
+    add.onclick = () => mutate(() => {
+      scene.bgEffects = [...rules, { id: uid('bgfx'), type: 'vignette' as BgEffectType, intensity: 60, conditions: [] }];
+    });
+    return section('Эффекты фона',
+      list, add,
+      h('div', {
+        class: 'hint',
+        text: 'Наслаиваются друг на друга, когда условия истинны — так можно показать напряжение, усталость, сбой Mesh и т.д. Видно только в F5, не на холсте.',
+      }),
+    );
   }
 
   // ================= ЭЛЕМЕНТ =================
