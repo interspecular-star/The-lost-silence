@@ -4,6 +4,7 @@
 
 import { Store } from '../core/store';
 import { seedProject } from '../core/seed';
+import { h } from './ui';
 import { mountTopbar } from './topbar';
 import { mountSidebar } from './sidebar';
 import { mountInspector } from './inspector';
@@ -16,7 +17,28 @@ import { mountMobs } from './mobs';
 import { mountQuests } from './quests';
 import { registerHotkeys } from './hotkeys';
 
-const store = new Store(Store.loadAutosave() ?? seedProject());
+const autosave = Store.loadAutosave();
+const store = new Store(autosave.project ?? seedProject());
+
+// сохранение есть, но повреждено/несовместимо — предупреждаем громко, а не тихо подставляем seed
+if (autosave.corrupted) {
+  const banner = h('div', {
+    style: `position:fixed;top:0;left:0;right:0;z-index:9999;
+      background:#3a1f1f;color:#f3d9d9;border-bottom:1px solid #a34;
+      padding:10px 16px;font-size:13px;line-height:1.5;
+      display:flex;align-items:center;gap:14px;font-family:system-ui,sans-serif;`,
+  });
+  banner.appendChild(h('span', {
+    text: `⚠ Не удалось прочитать сохранённый проект в этом браузере (${location.origin}) — открыт пустой проект по умолчанию. Проверьте, не остались ли ваши правки на другом адресе/порту (например, localhost:5174), прежде чем продолжать работу.`,
+    style: 'flex:1;',
+  }));
+  const close = h('button', {
+    text: '✕', style: 'background:none;border:none;color:#f3d9d9;cursor:pointer;font-size:16px;padding:0 4px;',
+  });
+  close.onclick = () => banner.remove();
+  banner.appendChild(close);
+  document.body.appendChild(banner);
+}
 
 const topbar = document.getElementById('topbar')!;
 const left = document.getElementById('sidebar-left')!;

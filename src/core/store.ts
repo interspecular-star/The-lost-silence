@@ -40,6 +40,8 @@ export class Store {
     this.project = project;
     this.currentSceneId = project.startSceneId ?? project.scenes[0]?.id ?? null;
     this.currentDialogueId = project.dialogues[0]?.id ?? null;
+    // страховка: закрытие/перезагрузка вкладки не должна ждать 600мс debounce автосейва
+    window.addEventListener('beforeunload', () => this.flushAutosave());
   }
 
   // ---------- события ----------
@@ -178,21 +180,36 @@ export class Store {
   // ---------- автосохранение в localStorage ----------
   private scheduleAutosave() {
     clearTimeout(this.saveTimer);
-    this.saveTimer = window.setTimeout(() => {
-      try {
-        localStorage.setItem('tls_project', JSON.stringify(this.project));
-      } catch { /* переполнение хранилища — игнорируем */ }
-    }, 600);
+    this.saveTimer = window.setTimeout(() => this.flushAutosave(), 600);
   }
 
-  static loadAutosave(): Project | null {
+  /** Немедленная запись, минуя debounce — страховка перед закрытием/перезагрузкой страницы */
+  private flushAutosave() {
+    clearTimeout(this.saveTimer);
     try {
-      const raw = localStorage.getItem('tls_project');
-      if (!raw) return null;
+      localStorage.setItem('tls_project', JSON.stringify(this.project));
+    } catch { /* переполнение хранилища — игнорируем */ }
+  }
+
+  /**
+   * project — восстановленный проект или null (нечего восстанавливать / не удалось).
+   * corrupted — true, только если сохранение БЫЛО, но не прошло парсинг/проверку формата
+   * (в отличие от «ничего не сохранено» — это единственный случай, о котором стоит громко
+   * предупредить пользователя, а не тихо подставлять seed-проект).
+   */
+  static loadAutosave(): { project: Project | null; corrupted: boolean } {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem('tls_project');
+    } catch { /* localStorage недоступен */ }
+    if (!raw) return { project: null, corrupted: false };
+    try {
       const p = JSON.parse(raw);
-      if (p && p.formatVersion === 1 && Array.isArray(p.scenes)) return p as Project;
-    } catch { /* повреждено */ }
-    return null;
+      if (p && p.formatVersion === 1 && Array.isArray(p.scenes)) return { project: p as Project, corrupted: false };
+      return { project: null, corrupted: true };
+    } catch {
+      return { project: null, corrupted: true };
+    }
   }
 }
 
