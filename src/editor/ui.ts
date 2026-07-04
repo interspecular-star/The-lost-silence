@@ -115,7 +115,7 @@ export function rangeInput(
   min: number,
   max: number,
   step: number,
-  onInput: (v: number) => void,
+  onCommit: (v: number) => void,
 ): HTMLElement {
   const wrap = h('div', { class: 'range-row' });
   const input = h('input', {
@@ -124,11 +124,11 @@ export function rangeInput(
   }) as HTMLInputElement;
   input.value = String(value);
   const label = h('span', { class: 'range-val', text: String(value) });
-  input.oninput = () => {
-    const n = parseFloat(input.value);
-    label.textContent = String(n);
-    onInput(n);
-  };
+  // label обновляем на каждый тик протяжки, но onCommit (снимок + полная перерисовка
+  // инспектора) — только по отпусканию, иначе перерисовка пересоздаёт сам ползунок
+  // прямо под курсором и драг «соскальзывает»
+  input.oninput = () => { label.textContent = input.value; };
+  input.onchange = () => onCommit(parseFloat(input.value));
   wrap.append(input, label);
   return wrap;
 }

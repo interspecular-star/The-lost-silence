@@ -271,15 +271,15 @@ export class StageView {
     const scale = (cfg.scale ?? 100) / 100;
 
     const wrap = h('div', { style: 'position:absolute;inset:0;overflow:hidden;' });
-    const img = h('div', {
-      style: `position:absolute;inset:-10%;background-size:cover;
-        background-position:${posX}% ${posY}%;
-        transform:scale(${scale});opacity:${opacity};
-        filter:brightness(${brightness}%) contrast(${contrast}%)${blur ? ` blur(${blur}px)` : ''};`,
-    });
+    const img = h('div', { style: 'position:absolute;inset:-10%;' });
+    // фон (цвет/градиент) — шорткат, поэтому задаём ДО остальных свойств background-*
     img.style.background = scene.background;
     if (scene.bgImage) img.style.backgroundImage = `url(${scene.bgImage})`;
-    else img.style.backgroundImage = scene.background.includes('gradient') ? scene.background : 'none';
+    img.style.backgroundSize = 'cover';
+    img.style.backgroundPosition = `${posX}% ${posY}%`;
+    img.style.transform = `scale(${scale})`;
+    img.style.opacity = String(opacity);
+    img.style.filter = `brightness(${brightness}%) contrast(${contrast}%)${blur ? ` blur(${blur}px)` : ''}`;
     wrap.appendChild(img);
     return wrap;
   }
