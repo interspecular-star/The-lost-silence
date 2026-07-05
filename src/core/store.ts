@@ -32,6 +32,10 @@ export class Store {
   gridEnabled = false;
   guidesVisible = true;
 
+  /** Вызывается, если localStorage.setItem упал (обычно — переполнение квоты браузера,
+   * часто из-за встроенных картинок). Автосейв на диск при этом всё равно продолжает работать. */
+  onLocalStorageQuotaExceeded: (() => void) | null = null;
+
   private past: string[] = [];
   private future: string[] = [];
   private listeners: Map<StoreEvent, Set<Listener>> = new Map();
@@ -189,7 +193,12 @@ export class Store {
     clearTimeout(this.saveTimer);
     try {
       localStorage.setItem('tls_project', JSON.stringify(this.project));
-    } catch { /* переполнение хранилища — игнорируем */ }
+    } catch {
+      // переполнение квоты браузера (частая причина — встроенные картинки) — не молчим,
+      // потому что раньше это тихо приводило к потере правок; резервная копия на диске
+      // (ниже) при этом остаётся рабочей и её размер квотой браузера не ограничен.
+      this.onLocalStorageQuotaExceeded?.();
+    }
     // резервная копия на диске — не зависит от origin/порта браузера и от кода в src/
     saveServerSave(this.project);
   }

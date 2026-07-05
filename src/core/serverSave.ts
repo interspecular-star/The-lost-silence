@@ -23,12 +23,18 @@ export async function loadServerSave(): Promise<Project | null> {
   }
 }
 
-/** Пишет проект на диск (best-effort, тихо игнорирует ошибку сети/отсутствие dev-сервера) */
+/**
+ * Пишет проект на диск (best-effort, тихо игнорирует ошибку сети/отсутствие dev-сервера).
+ * БЕЗ keepalive: у keepalive-запросов в браузере жёсткий лимит тела ~64КБ — реальный проект
+ * (диалоги, NPC, картинки) почти всегда больше, и запрос молча проваливался бы каждый раз
+ * (проверено: 139КБ уже "Failed to fetch" с keepalive:true). Обычный debounce (600мс) успевает
+ * отработать до закрытия вкладки в подавляющем большинстве случаев; на закрытие вкладки есть
+ * отдельный синхронный флаш в localStorage — вот там реальная защита от потери последних правок.
+ */
 export function saveServerSave(project: Project) {
   fetch(ENDPOINT, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(project),
-    keepalive: true, // запрос должен пережить закрытие/перезагрузку вкладки (вызывается из beforeunload)
   }).catch(() => { /* нет dev-сервера — молча игнорируем */ });
 }

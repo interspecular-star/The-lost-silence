@@ -51,6 +51,18 @@ async function bootstrap() {
 
   const store = new Store(project ?? seedProject());
 
+  let quotaWarningShown = false;
+  store.onLocalStorageQuotaExceeded = () => {
+    if (quotaWarningShown) return; // не спамить баннером на каждый автосейв подряд
+    quotaWarningShown = true;
+    showBanner(
+      '⚠ Хранилище браузера переполнено (обычно из-за встроенных картинок) — последние правки НЕ сохраняются в этом браузере. '
+      + 'Резервная копия на диске (local-save/project.json) продолжает работать и её размер эта проблема не касается — но лучше уменьшить размер картинок в проекте '
+      + 'или чаще скачивать файл проекта (💾 Сохранить / Ctrl+S) на всякий случай.',
+      'warn',
+    );
+  };
+
   if (autosave.corrupted && recoveredFromDisk) {
     showBanner(
       '↺ Хранилище браузера повреждено/недоступно на этом адресе — проект восстановлен из резервной копии на диске (local-save/project.json). Изменений с последнего автосейва на диск не потеряно.',
