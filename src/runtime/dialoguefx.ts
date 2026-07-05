@@ -9,8 +9,11 @@ const DIALOGUE_FX_CSS = `
   backdrop-filter: blur(8px);
   border-top: 1px solid color-mix(in srgb, var(--dbox-border-accent, #4fd1c5) 22%, transparent);
   opacity: 0; transform: translateY(10px);
+  --dskin-loop: none; /* скины с бесконечной анимацией (hydrosynth/nexus) переопределяют это, не engine */
 }
-.dbox.enter { animation: dbox-in .26s ease-out forwards; }
+/* второй слот анимации берётся из --dskin-loop, чтобы разовый вход и бесконечный
+   скиновый эффект жили в одном свойстве animation без конфликта специфичности */
+.dbox.enter { animation: dbox-in .26s ease-out forwards, var(--dskin-loop); }
 @keyframes dbox-in { to { opacity: 1; transform: translateY(0); } }
 
 /* база вынесена из инлайн-стиля, чтобы скины ниже могли её переопределять */
@@ -87,12 +90,38 @@ const DIALOGUE_FX_CSS = `
   background-repeat: no-repeat;
   background-size: 100% 100%, 220% 2px;
   background-position: 0 0, -60% 0;
-  animation: dhydro-caustic 7s linear infinite;
+  --dskin-loop: dhydro-caustic 7s linear infinite;
 }
 .dskin-hydrosynth .drel-fill { box-shadow: 0 0 6px 0 var(--dbox-border-accent); }
 @keyframes dhydro-caustic { to { background-position: 0 0, 160% 0; } }
 @media (prefers-reduced-motion: reduce) {
-  .dskin-hydrosynth { animation: none; background-position: 0 0, 50% 0; }
+  .dskin-hydrosynth { --dskin-loop: none; background-position: 0 0, 50% 0; }
+}
+
+/* ---- Nexus: сертифицированная стерильность — ровные уголки-скобки, сканирующее мерцание ---- */
+.dskin-nexus { border-top-width: 1px; }
+.dskin-nexus::before, .dskin-nexus::after {
+  content: ''; position: absolute; top: -1px; width: 10px; height: 6px;
+  border: 1px solid var(--dbox-border-accent); opacity: .9;
+}
+.dskin-nexus::before { left: 14px; border-right: none; border-bottom: none; }
+.dskin-nexus::after { right: 14px; border-left: none; border-bottom: none; }
+.dskin-nexus .dname { letter-spacing: 3px; font-weight: 600; }
+.dskin-nexus .dname::after {
+  content: ''; display: inline-block; width: 4px; height: 4px; margin-left: 6px;
+  background: var(--dbox-border-accent); border-radius: 50%;
+  animation: dnexus-blink 2.2s steps(1) infinite;
+}
+@keyframes dnexus-blink { 0%, 40% { opacity: 1; } 50%, 90% { opacity: .15; } 100% { opacity: 1; } }
+.dskin-nexus { --dskin-loop: dnexus-scan 5s linear infinite; }
+@keyframes dnexus-scan {
+  0%, 92% { border-top-color: color-mix(in srgb, var(--dbox-border-accent) 22%, transparent); }
+  94% { border-top-color: var(--dbox-border-accent); }
+  96%, 100% { border-top-color: color-mix(in srgb, var(--dbox-border-accent) 22%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .dskin-nexus { --dskin-loop: none; }
+  .dskin-nexus .dname::after { animation: none; }
 }
 `;
 

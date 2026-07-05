@@ -1412,6 +1412,13 @@ export class Engine {
     nameEl.style.cssText = `font-size:1.6em;font-weight:200;letter-spacing:2px;color:#e6edf3;margin-bottom:0.2em;`;
     right.appendChild(nameEl);
 
+    if (npc.age || npc.role) {
+      const sub = document.createElement('div');
+      sub.textContent = [npc.role, npc.age ? `возраст: ${npc.age}` : ''].filter(Boolean).join(' · ');
+      sub.style.cssText = 'font-size:0.78em;opacity:0.6;margin-bottom:0.6em;';
+      right.appendChild(sub);
+    }
+
     if (faction) {
       const badge = document.createElement('div');
       badge.textContent = faction.name;
@@ -1461,9 +1468,13 @@ export class Engine {
       right.appendChild(wrap);
     };
     section('Досье', npc.description);
+    section('Характер', npc.personality);
     section('Сильные стороны', npc.strengths);
     section('Слабые стороны', npc.weaknesses);
+    section('Страхи', npc.fears);
     section('Желания', npc.wants);
+    section('Отношение к Archon', npc.archonView);
+    section('Отношение к OldNet', npc.oldnetView);
 
     if (npc.relationships?.length) {
       const wrap = document.createElement('div');

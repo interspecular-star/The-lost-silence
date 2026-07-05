@@ -11,6 +11,7 @@ import {
   h, textInput, numberInput, selectInput, textArea,
   promptModal, confirmModal, toast, pickImageFile, pickImageFileCompressed,
 } from './ui';
+import { openNPCImportPanel } from './npcImport';
 
 export function mountNPCs(store: Store): HTMLElement {
   const root = h('div', { id: 'vars-wrap' }); // тот же скролл-контейнер, что у переменных
@@ -100,13 +101,18 @@ export function mountNPCs(store: Store): HTMLElement {
   function renderNPCList() {
     const head = h('div', { style: 'display:flex;align-items:center;justify-content:space-between;margin:26px 0 6px;' });
     head.appendChild(h('h2', { style: 'margin:0;font-size:16px;font-weight:600;', text: 'Персонажи (NPC)' }));
+    const btnRow = h('div', { style: 'display:flex;gap:6px;' });
     const add = h('button', { class: 'btn accent', text: '+ Персонаж' });
     add.onclick = async () => {
       const name = await promptModal('Имя персонажа', '', 'Например: Матис');
       if (!name) return;
       mutate(() => { createNPC(store.project, name, store.project.factions?.[0]?.id ?? null); });
     };
-    head.appendChild(add);
+    btnRow.appendChild(add);
+    const bulk = h('button', { class: 'btn', text: '⇩ Импорт JSON' });
+    bulk.onclick = () => openNPCImportPanel(store);
+    btnRow.appendChild(bulk);
+    head.appendChild(btnRow);
     root.appendChild(head);
     root.appendChild(h('div', {
       class: 'hint', style: 'margin-bottom:14px;',
@@ -162,6 +168,16 @@ export function mountNPCs(store: Store): HTMLElement {
     };
     row1.appendChild(del);
     fields.appendChild(row1);
+
+    const rowAgeRole = h('div', { style: 'display:flex;gap:6px;align-items:center;' });
+    const ageIn = textInput(npc.age ?? '', (v) => mutate(() => { npc.age = v || undefined; }), { placeholder: 'возраст' });
+    ageIn.style.width = '64px';
+    ageIn.style.flex = '0 0 64px';
+    rowAgeRole.appendChild(ageIn);
+    const roleIn = textInput(npc.role ?? '', (v) => mutate(() => { npc.role = v || undefined; }), { placeholder: 'роль/должность' });
+    roleIn.style.flex = '1';
+    rowAgeRole.appendChild(roleIn);
+    fields.appendChild(rowAgeRole);
 
     const row2 = h('div', { style: 'display:flex;gap:6px;align-items:center;' });
     const facOptions: [string, string][] = [
@@ -219,6 +235,12 @@ export function mountNPCs(store: Store): HTMLElement {
       style: 'display:flex;flex-direction:column;gap:8px;margin-top:4px;padding-top:8px;border-top:1px solid var(--border);',
     });
 
+    const groupLabel = (text: string) => h('div', {
+      style: 'color:var(--text-faint);font-size:11px;letter-spacing:0.5px;text-transform:uppercase;margin-top:6px;',
+      text,
+    });
+
+    wrap.appendChild(groupLabel('Досье'));
     const fpRow = h('div', { style: 'display:flex;gap:10px;align-items:flex-start;' });
     const fpImg = h('img', {
       src: npcFullPortrait(store.project, npc),
@@ -248,6 +270,11 @@ export function mountNPCs(store: Store): HTMLElement {
     quote.placeholder = 'Цитата/девиз — задаёт голос персонажа';
     wrap.appendChild(quote);
 
+    wrap.appendChild(groupLabel('Характер'));
+    const personality = textArea(npc.personality ?? '', (v) => mutate(() => { npc.personality = v || undefined; }), 2);
+    personality.placeholder = 'Характер';
+    wrap.appendChild(personality);
+
     const strengths = textArea(npc.strengths ?? '', (v) => mutate(() => { npc.strengths = v || undefined; }), 2);
     strengths.placeholder = 'Сильные стороны';
     wrap.appendChild(strengths);
@@ -256,11 +283,24 @@ export function mountNPCs(store: Store): HTMLElement {
     weaknesses.placeholder = 'Слабые стороны';
     wrap.appendChild(weaknesses);
 
+    const fears = textArea(npc.fears ?? '', (v) => mutate(() => { npc.fears = v || undefined; }), 2);
+    fears.placeholder = 'Страхи';
+    wrap.appendChild(fears);
+
     const wants = textArea(npc.wants ?? '', (v) => mutate(() => { npc.wants = v || undefined; }), 2);
     wants.placeholder = 'Желания и мотивация — как искать подход';
     wrap.appendChild(wants);
 
-    wrap.appendChild(h('div', { style: 'color:var(--text-faint);font-size:11px;margin-top:2px;', text: 'Связи с другими персонажами' }));
+    wrap.appendChild(groupLabel('Мировоззрение'));
+    const archonView = textArea(npc.archonView ?? '', (v) => mutate(() => { npc.archonView = v || undefined; }), 2);
+    archonView.placeholder = 'Отношение к Archon';
+    wrap.appendChild(archonView);
+
+    const oldnetView = textArea(npc.oldnetView ?? '', (v) => mutate(() => { npc.oldnetView = v || undefined; }), 2);
+    oldnetView.placeholder = 'Отношение к OldNet';
+    wrap.appendChild(oldnetView);
+
+    wrap.appendChild(groupLabel('Связи'));
     const relList = h('div', { style: 'display:flex;flex-direction:column;gap:5px;' });
     const others = (store.project.npcs ?? []).filter((n) => n.id !== npc.id);
     const rels = npc.relationships ?? [];

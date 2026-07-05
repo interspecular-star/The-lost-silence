@@ -202,7 +202,7 @@ export interface Dialogue {
 
 // ---------- Фракции и NPC ----------
 /** Визуальное оформление диалогового блока для NPC этой фракции (см. src/runtime/dialoguefx.ts) */
-export type FactionSkinId = 'flux' | 'sylvarium' | 'woodhaven' | 'cavernium' | 'aeralis' | 'hydrosynth';
+export type FactionSkinId = 'flux' | 'sylvarium' | 'woodhaven' | 'cavernium' | 'aeralis' | 'hydrosynth' | 'nexus';
 export const FACTION_SKIN_LABELS: Record<FactionSkinId, string> = {
   flux: 'Flux Nomads — сварные скобки, пунктир',
   sylvarium: 'Sylvarium — мягкие углы, живая линия',
@@ -210,6 +210,7 @@ export const FACTION_SKIN_LABELS: Record<FactionSkinId, string> = {
   cavernium: 'Cavernium — плотный фон, двойная линия',
   aeralis: 'Aeralis — прозрачность, дистанция',
   hydrosynth: 'Hydrosynth — мягкие углы, блик по линии',
+  nexus: 'Nexus — ровные уголки, сканирующее мерцание',
 };
 
 export interface Faction {
@@ -240,9 +241,15 @@ export interface NPC {
   fullPortrait?: string;     // полноростовой арт для экрана профиля персонажа
   quote?: string;            // короткая цитата/девиз — сразу задаёт голос персонажа
   description?: string;      // краткое досье (для редактора)
+  age?: string;              // возраст — строка (встречаются приблизительные вида «~31»)
+  role?: string;             // роль/должность
+  personality?: string;      // характер
   strengths?: string;        // сильные стороны — экран профиля
   weaknesses?: string;       // слабые стороны — экран профиля
+  fears?: string;            // страхи
   wants?: string;            // желания/мотивация — как искать подход
+  archonView?: string;       // отношение к Archon
+  oldnetView?: string;       // отношение к OldNet
   relationships?: NPCRelationship[]; // связи с другими NPC
   relationVarId: string;     // авто-переменная category:'npc' — отношение 0..100
   metVarId: string;          // авто-переменная category:'npc' — знаком ли игрок (boolean)

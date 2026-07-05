@@ -4,7 +4,7 @@
 // Используется и редактором, и движком.
 // ============================================================
 
-import { Project, Faction, NPC, VariableDef, VarValue, uid } from './types';
+import { Project, Faction, NPC, NPCRelationship, VariableDef, VarValue, uid } from './types';
 
 // ---------- создание с авто-переменными ----------
 
@@ -89,6 +89,83 @@ export function renameNPC(project: Project, npc: NPC, name: string) {
   if (rel) rel.title = `Отношение: ${name}`;
   const met = project.variables.find((v) => v.id === npc.metVarId);
   if (met) met.title = `Знаком: ${name}`;
+}
+
+// ---------- массовый импорт ----------
+
+export interface NPCImportEntry {
+  name: string;
+  age?: string;
+  role?: string;
+  personality?: string;
+  strengths?: string;
+  weaknesses?: string;
+  fears?: string;
+  wants?: string;
+  archonView?: string;
+  oldnetView?: string;
+  description?: string;
+  weight?: number;
+  faction?: string; // имя фракции — переопределяет фракцию по умолчанию для этой записи
+  relationships?: { npcName: string; label: string }[];
+}
+
+export interface NPCImportResult {
+  created: number;
+  warnings: string[];
+}
+
+/**
+ * Создаёт NPC из массива записей (вставка JSON вместо ручного заполнения формы одного за
+ * другим — см. docs/dev/NPC.docx). Связи резолвятся по имени NPC, а не по id, во втором
+ * проходе — на момент вставки персонаж, на которого ссылаются, может ещё не существовать
+ * в проекте или создаваться этим же импортом.
+ */
+export function importNPCs(project: Project, entries: NPCImportEntry[], defaultFactionId: string | null): NPCImportResult {
+  const warnings: string[] = [];
+  const factionByName = new Map((project.factions ?? []).map((f) => [f.name.toLowerCase(), f.id]));
+  const pairs: { entry: NPCImportEntry; npc: NPC }[] = [];
+
+  for (const entry of entries) {
+    if (!entry.name || !entry.name.trim()) { warnings.push('Пропущена запись без имени'); continue; }
+    let factionId = defaultFactionId;
+    if (entry.faction) {
+      const fid = factionByName.get(entry.faction.toLowerCase());
+      if (fid) factionId = fid;
+      else warnings.push(`Фракция «${entry.faction}» не найдена для «${entry.name}» — использована фракция по умолчанию`);
+    }
+    const npc = createNPC(project, entry.name.trim(), factionId);
+    npc.age = entry.age || undefined;
+    npc.role = entry.role || undefined;
+    npc.personality = entry.personality || undefined;
+    npc.strengths = entry.strengths || undefined;
+    npc.weaknesses = entry.weaknesses || undefined;
+    npc.fears = entry.fears || undefined;
+    npc.wants = entry.wants || undefined;
+    npc.archonView = entry.archonView || undefined;
+    npc.oldnetView = entry.oldnetView || undefined;
+    npc.description = entry.description || undefined;
+    if (typeof entry.weight === 'number') npc.weight = Math.max(1, Math.min(10, Math.round(entry.weight)));
+    pairs.push({ entry, npc });
+  }
+
+  // связи — во втором проходе, когда все NPC этого импорта уже существуют в project.npcs
+  const nameToId = new Map<string, string>();
+  for (const n of project.npcs ?? []) if (!nameToId.has(n.name)) nameToId.set(n.name, n.id);
+
+  for (const { entry, npc } of pairs) {
+    if (!entry.relationships?.length) continue;
+    const rels: NPCRelationship[] = [];
+    for (const r of entry.relationships) {
+      const targetId = nameToId.get(r.npcName);
+      if (!targetId) { warnings.push(`Связь «${r.npcName}» не найдена для «${npc.name}» — пропущена`); continue; }
+      if (targetId === npc.id) continue;
+      rels.push({ id: uid('rel'), npcId: targetId, label: r.label ?? '' });
+    }
+    if (rels.length) npc.relationships = [...(npc.relationships ?? []), ...rels];
+  }
+
+  return { created: pairs.length, warnings };
 }
 
 // ---------- формула репутации ----------
