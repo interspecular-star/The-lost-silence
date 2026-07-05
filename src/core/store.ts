@@ -4,6 +4,9 @@
 
 import { Project, Scene, Dialogue, SceneElement, DialogueNode, VariableDef, deepClone } from './types';
 import { saveServerSave } from './serverSave';
+import { idbGetProject, idbSetProject, notifyProjectSavedElsewhere, onProjectSavedElsewhere } from './idbStore';
+
+const LEGACY_LOCALSTORAGE_KEY = 'tls_project'; // до перехода на IndexedDB — только для миграции старых сохранений
 
 export type EditorMode = 'scene' | 'dialogue' | 'npc' | 'items' | 'mobs' | 'quests' | 'variables';
 
@@ -32,12 +35,12 @@ export class Store {
   gridEnabled = false;
   guidesVisible = true;
 
-  /** Вызывается, если localStorage.setItem упал (обычно — переполнение квоты браузера,
-   * часто из-за встроенных картинок). Автосейв на диск при этом всё равно продолжает работать. */
-  onLocalStorageQuotaExceeded: (() => void) | null = null;
+  /** Вызывается, если запись автосейва в браузере (IndexedDB) не удалась. Резервная копия
+   * на диске при этом всё равно продолжает работать — её IndexedDB-проблемы не касаются. */
+  onBrowserSaveFailed: (() => void) | null = null;
   /** Вызывается, если резервная копия на диске НЕ записалась (диск переполнен, нет прав и т.п.) */
   onDiskSaveFailed: (() => void) | null = null;
-  /** Вызывается, если tls_project изменился в ДРУГОЙ вкладке этого редактора */
+  /** Вызывается, если проект был сохранён из ДРУГОЙ вкладки этого редактора */
   onExternalChange: (() => void) | null = null;
 
   private past: string[] = [];
@@ -55,9 +58,7 @@ export class Store {
     window.addEventListener('pagehide', () => this.flushAutosave());
     // другая открытая вкладка редактора сохранила проект — предупреждаем, а не тихо
     // позволяем этой вкладке позже перезаписать более свежие правки поверх них
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'tls_project' && e.newValue !== null) this.onExternalChange?.();
-    });
+    onProjectSavedElsewhere(() => this.onExternalChange?.());
   }
 
   // ---------- события ----------
@@ -193,7 +194,7 @@ export class Store {
     this.emit('view');
   }
 
-  // ---------- автосохранение в localStorage ----------
+  // ---------- автосохранение (IndexedDB — без маленького лимита localStorage) ----------
   private scheduleAutosave() {
     clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => this.flushAutosave(), 600);
@@ -202,14 +203,11 @@ export class Store {
   /** Немедленная запись, минуя debounce — страховка перед закрытием/перезагрузкой страницы */
   private flushAutosave() {
     clearTimeout(this.saveTimer);
-    try {
-      localStorage.setItem('tls_project', JSON.stringify(this.project));
-    } catch {
-      // переполнение квоты браузера (частая причина — встроенные картинки) — не молчим,
-      // потому что раньше это тихо приводило к потере правок; резервная копия на диске
-      // (ниже) при этом остаётся рабочей и её размер квотой браузера не ограничен.
-      this.onLocalStorageQuotaExceeded?.();
-    }
+    const json = JSON.stringify(this.project);
+    idbSetProject(json).then(
+      () => notifyProjectSavedElsewhere(),
+      () => this.onBrowserSaveFailed?.(), // редко: IndexedDB недоступна/запрещена/переполнена
+    );
     // резервная копия на диске — не зависит от origin/порта браузера и от кода в src/
     saveServerSave(this.project).then((ok) => {
       if (!ok) this.onDiskSaveFailed?.();
@@ -222,11 +220,26 @@ export class Store {
    * (в отличие от «ничего не сохранено» — это единственный случай, о котором стоит громко
    * предупредить пользователя, а не тихо подставлять seed-проект).
    */
-  static loadAutosave(): { project: Project | null; corrupted: boolean } {
-    let raw: string | null = null;
-    try {
-      raw = localStorage.getItem('tls_project');
-    } catch { /* localStorage недоступен */ }
+  static async loadAutosave(): Promise<{ project: Project | null; corrupted: boolean }> {
+    let raw = await idbGetProject();
+
+    // миграция: раньше автосейв жил в localStorage — если в IndexedDB пусто, но там
+    // что-то есть, переносим один раз и на этом больше не пишем в localStorage
+    if (!raw) {
+      let legacy: string | null = null;
+      try { legacy = localStorage.getItem(LEGACY_LOCALSTORAGE_KEY); } catch { /* недоступен */ }
+      if (legacy) {
+        raw = legacy;
+        try {
+          const p = JSON.parse(legacy);
+          if (p && p.formatVersion === 1 && Array.isArray(p.scenes)) {
+            await idbSetProject(legacy).catch(() => {});
+          }
+        } catch { /* обработается ниже как обычная ошибка парсинга */ }
+        try { localStorage.removeItem(LEGACY_LOCALSTORAGE_KEY); } catch { /* не критично */ }
+      }
+    }
+
     if (!raw) return { project: null, corrupted: false };
     try {
       const p = JSON.parse(raw);

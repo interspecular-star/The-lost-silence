@@ -38,7 +38,7 @@ function showBanner(text: string, tone: 'warn' | 'info') {
 }
 
 async function bootstrap() {
-  const autosave = Store.loadAutosave();
+  const autosave = await Store.loadAutosave();
   let project = autosave.project;
   let recoveredFromDisk = false;
   let diskCorrupted = false;
@@ -54,14 +54,13 @@ async function bootstrap() {
   const store = new Store(project ?? seedProject());
 
   // баннеры-предупреждения — не чаще одного раза за сессию каждый (иначе спам на каждый автосейв)
-  let quotaWarningShown = false;
-  store.onLocalStorageQuotaExceeded = () => {
-    if (quotaWarningShown) return;
-    quotaWarningShown = true;
+  let browserSaveFailWarningShown = false;
+  store.onBrowserSaveFailed = () => {
+    if (browserSaveFailWarningShown) return;
+    browserSaveFailWarningShown = true;
     showBanner(
-      '⚠ Хранилище браузера переполнено (обычно из-за встроенных картинок) — последние правки НЕ сохраняются в этом браузере. '
-      + 'Резервная копия на диске (local-save/project.json) продолжает работать и её размер эта проблема не касается — но лучше уменьшить размер картинок в проекте '
-      + 'или чаще скачивать файл проекта (💾 Сохранить / Ctrl+S) на всякий случай.',
+      '⚠ Не удалось сохранить проект в этом браузере (IndexedDB недоступна или запрещена настройками браузера) — последние правки НЕ сохраняются локально. '
+      + 'Резервная копия на диске (local-save/project.json) продолжает работать независимо от этого — но на всякий случай скачайте файл проекта (💾 Сохранить / Ctrl+S).',
       'warn',
     );
   };
