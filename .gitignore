@@ -2,12 +2,13 @@
 node_modules/
 dist/
 
-# собирается автоматически (npm run runtime)
-public/runtime.js
+# арт-ассеты и локальные материалы владельца — не трекаем в git
+public/
 
 # локальные настройки Claude Code
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
+.claude/skills/ui-ux-pro-max/
 
 # системное
 Thumbs.db
