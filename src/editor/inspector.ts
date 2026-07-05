@@ -4,7 +4,7 @@
 
 import { Store } from '../core/store';
 import {
-  SceneElement, DialogueNode, Condition, Effect, VarValue,
+  SceneElement, DialogueNode, Condition, Effect, VarValue, VarType,
   ELEMENT_TYPE_LABELS, NODE_TYPE_LABELS, SCENE_KIND_LABELS, uid,
   BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
 } from '../core/types';
@@ -666,18 +666,33 @@ export function mountInspector(root: HTMLElement, store: Store) {
     return wrap;
   }
 
+  // допустимые операции зависят от типа переменной — «+»/«−» для булевых значений
+  // молча превращают true/false в число (0/1), и такое значение потом не match'ится
+  // ни с одним условием «=true»/«=false»; для строк осмысленно только «=»
+  function opsForType(type: VarType | undefined): [string, string][] {
+    if (type === 'boolean') return [['set', '='], ['toggle', '⇄']];
+    if (type === 'string') return [['set', '=']];
+    return [['set', '='], ['add', '+'], ['sub', '−']];
+  }
+
   function effectsEditor(list: Effect[], commit: (list: Effect[]) => void): HTMLElement {
     const wrap = h('div');
     list.forEach((e, i) => {
       const card = h('div', { class: 'cond-card' });
       const r = h('div', { class: 'row' });
+      const type = store.getVariable(e.varId)?.type;
       r.appendChild(selectInput(e.varId, varOptions(true), (v) => {
         const copy = [...list];
         const def = store.getVariable(v);
-        copy[i] = { ...e, varId: v, value: def?.type === 'boolean' ? true : def?.type === 'number' ? 0 : '' };
+        const validOps = opsForType(def?.type).map(([op]) => op);
+        copy[i] = {
+          ...e, varId: v,
+          op: validOps.includes(e.op) ? e.op : 'set',
+          value: def?.type === 'boolean' ? true : def?.type === 'number' ? 0 : '',
+        };
         commit(copy);
       }));
-      r.appendChild(selectInput(e.op, [['set', '='], ['add', '+'], ['sub', '−'], ['toggle', '⇄']], (v) => {
+      r.appendChild(selectInput(e.op, opsForType(type), (v) => {
         const copy = [...list];
         copy[i] = { ...e, op: v as Effect['op'] };
         commit(copy);
