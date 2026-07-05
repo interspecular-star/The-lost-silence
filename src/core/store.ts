@@ -35,6 +35,10 @@ export class Store {
   /** Вызывается, если localStorage.setItem упал (обычно — переполнение квоты браузера,
    * часто из-за встроенных картинок). Автосейв на диск при этом всё равно продолжает работать. */
   onLocalStorageQuotaExceeded: (() => void) | null = null;
+  /** Вызывается, если резервная копия на диске НЕ записалась (диск переполнен, нет прав и т.п.) */
+  onDiskSaveFailed: (() => void) | null = null;
+  /** Вызывается, если tls_project изменился в ДРУГОЙ вкладке этого редактора */
+  onExternalChange: (() => void) | null = null;
 
   private past: string[] = [];
   private future: string[] = [];
@@ -45,8 +49,15 @@ export class Store {
     this.project = project;
     this.currentSceneId = project.startSceneId ?? project.scenes[0]?.id ?? null;
     this.currentDialogueId = project.dialogues[0]?.id ?? null;
-    // страховка: закрытие/перезагрузка вкладки не должна ждать 600мс debounce автосейва
+    // страховка: закрытие/перезагрузка вкладки не должна ждать 600мс debounce автосейва.
+    // pagehide — доп. подстраховка на случай, когда beforeunload не срабатывает (bfcache и т.п.)
     window.addEventListener('beforeunload', () => this.flushAutosave());
+    window.addEventListener('pagehide', () => this.flushAutosave());
+    // другая открытая вкладка редактора сохранила проект — предупреждаем, а не тихо
+    // позволяем этой вкладке позже перезаписать более свежие правки поверх них
+    window.addEventListener('storage', (e) => {
+      if (e.key === 'tls_project' && e.newValue !== null) this.onExternalChange?.();
+    });
   }
 
   // ---------- события ----------
@@ -200,7 +211,9 @@ export class Store {
       this.onLocalStorageQuotaExceeded?.();
     }
     // резервная копия на диске — не зависит от origin/порта браузера и от кода в src/
-    saveServerSave(this.project);
+    saveServerSave(this.project).then((ok) => {
+      if (!ok) this.onDiskSaveFailed?.();
+    });
   }
 
   /**

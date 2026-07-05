@@ -41,24 +41,47 @@ async function bootstrap() {
   const autosave = Store.loadAutosave();
   let project = autosave.project;
   let recoveredFromDisk = false;
+  let diskCorrupted = false;
 
   // в localStorage браузера пусто или файл повреждён — пробуем резервную копию на диске
   // (местный файл local-save/project.json, не зависит от порта браузера и от кода в src/)
   if (!project) {
     const disk = await loadServerSave();
-    if (disk) { project = disk; recoveredFromDisk = true; }
+    if (disk.status === 'ok') { project = disk.project; recoveredFromDisk = true; }
+    else if (disk.status === 'corrupted') { diskCorrupted = true; }
   }
 
   const store = new Store(project ?? seedProject());
 
+  // баннеры-предупреждения — не чаще одного раза за сессию каждый (иначе спам на каждый автосейв)
   let quotaWarningShown = false;
   store.onLocalStorageQuotaExceeded = () => {
-    if (quotaWarningShown) return; // не спамить баннером на каждый автосейв подряд
+    if (quotaWarningShown) return;
     quotaWarningShown = true;
     showBanner(
       '⚠ Хранилище браузера переполнено (обычно из-за встроенных картинок) — последние правки НЕ сохраняются в этом браузере. '
       + 'Резервная копия на диске (local-save/project.json) продолжает работать и её размер эта проблема не касается — но лучше уменьшить размер картинок в проекте '
       + 'или чаще скачивать файл проекта (💾 Сохранить / Ctrl+S) на всякий случай.',
+      'warn',
+    );
+  };
+  let diskFailWarningShown = false;
+  store.onDiskSaveFailed = () => {
+    if (diskFailWarningShown) return;
+    diskFailWarningShown = true;
+    showBanner(
+      '⚠ Не удалось записать резервную копию проекта на диск (local-save/project.json) — возможно, диск переполнен или закрыт для записи. '
+      + 'Автосейв в браузере при этом продолжает работать, но лучше проверить диск и на всякий случай скачать файл проекта (💾 Сохранить / Ctrl+S).',
+      'warn',
+    );
+  };
+  let externalChangeWarningShown = false;
+  store.onExternalChange = () => {
+    if (externalChangeWarningShown) return;
+    externalChangeWarningShown = true;
+    showBanner(
+      '⚠ Проект был сохранён из другой открытой вкладки этого редактора. Если продолжите работать здесь, следующее сохранение перезапишет те правки. '
+      + 'Рекомендуется держать открытой только одну вкладку редактора — закройте лишние и перезагрузите эту.',
       'warn',
     );
   };
@@ -68,14 +91,28 @@ async function bootstrap() {
       '↺ Хранилище браузера повреждено/недоступно на этом адресе — проект восстановлен из резервной копии на диске (local-save/project.json). Изменений с последнего автосейва на диск не потеряно.',
       'info',
     );
+  } else if (autosave.corrupted && diskCorrupted) {
+    showBanner(
+      `⚠ Повреждены ОБА источника: сохранение в браузере (${location.origin}) и резервная копия на диске (local-save/project.json) — открыт пустой проект по умолчанию. `
+      + 'Проверьте local-save/history/ — там могут быть предыдущие рабочие версии.',
+      'warn',
+    );
   } else if (autosave.corrupted) {
     showBanner(
       `⚠ Не удалось прочитать сохранённый проект в этом браузере (${location.origin}), и резервной копии на диске не нашлось — открыт пустой проект по умолчанию. Проверьте другой адрес/порт (например, localhost:5174), прежде чем продолжать работу.`,
       'warn',
     );
+  } else if (diskCorrupted) {
+    // localStorage было просто пустым (не «повреждено»), но на диске лежит НЕЧИТАЕМЫЙ файл —
+    // раньше это молчали, показывая seed так, будто резервной копии никогда и не было
+    showBanner(
+      '⚠ Хранилище браузера пусто, а резервная копия на диске (local-save/project.json) повреждена — открыт пустой проект по умолчанию. '
+      + 'Проверьте local-save/history/ — там могут быть предыдущие рабочие версии.',
+      'warn',
+    );
   }
-  // project===null && !corrupted (просто пусто) && recoveredFromDisk — тихо восстановили с диска,
-  // без баннера: это ожидаемый путь восстановления, а не авария.
+  // project===null && !corrupted && !diskCorrupted (recoveredFromDisk истина или обоих
+  // источников просто нет) — тихо, без баннера: это ожидаемый путь, а не авария.
 
   const topbar = document.getElementById('topbar')!;
   const left = document.getElementById('sidebar-left')!;
