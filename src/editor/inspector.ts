@@ -339,7 +339,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     const actionSection = section('Действие по клику');
     const action = el.action ?? { type: 'none' as const };
     actionSection.appendChild(row('Тип', selectInput(action.type,
-      [['none', '— нет —'], ['gotoScene', 'Перейти в сцену'], ['startDialogue', 'Запустить диалог'], ['setVars', 'Изменить переменные'], ['startCombat', 'Начать бой']],
+      [['none', '— нет —'], ['gotoScene', 'Перейти в сцену'], ['startDialogue', 'Запустить диалог'], ['setVars', 'Изменить переменные'], ['startCombat', 'Начать бой'], ['openInventory', 'Открыть инвентарь']],
       (v) => mutate(() => { el.action = { type: v as typeof action.type, effects: el.action?.effects }; }))));
     if (action.type === 'gotoScene') {
       actionSection.appendChild(row('Сцена', selectInput(action.sceneId ?? '',

@@ -956,6 +956,13 @@ export class Engine {
         if (dlgId) this.startDialogue(dlgId);
       });
     }
+    if (a.type === 'openInventory') this.openInventory();
+  }
+
+  /** Открывает экран инвентаря напрямую — для кнопок на сцене там, где HUD скрыт (Scene.hudMode:'off') */
+  openInventory() {
+    this.invOpen = true;
+    this.renderInventory();
   }
 
   // ---------- операции с предметами ----------

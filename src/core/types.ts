@@ -41,7 +41,7 @@ export interface Effect {
 }
 
 // ---------- Действия элементов ----------
-export type ActionType = 'none' | 'gotoScene' | 'startDialogue' | 'setVars' | 'startCombat';
+export type ActionType = 'none' | 'gotoScene' | 'startDialogue' | 'setVars' | 'startCombat' | 'openInventory';
 export interface ElementAction {
   type: ActionType;
   sceneId?: string;
