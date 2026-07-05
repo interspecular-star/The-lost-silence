@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Project, Scene, Dialogue, SceneElement, DialogueNode, VariableDef, deepClone } from './types';
+import { saveServerSave } from './serverSave';
 
 export type EditorMode = 'scene' | 'dialogue' | 'npc' | 'items' | 'mobs' | 'quests' | 'variables';
 
@@ -189,6 +190,8 @@ export class Store {
     try {
       localStorage.setItem('tls_project', JSON.stringify(this.project));
     } catch { /* переполнение хранилища — игнорируем */ }
+    // резервная копия на диске — не зависит от origin/порта браузера и от кода в src/
+    saveServerSave(this.project);
   }
 
   /**

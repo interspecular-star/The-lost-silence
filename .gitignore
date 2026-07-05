@@ -5,6 +5,10 @@ dist/
 # арт-ассеты и локальные материалы владельца — не трекаем в git
 public/
 
+# резервная копия проекта редактора (см. vite.config.ts, src/core/serverSave.ts) —
+# личные рабочие данные владельца, не код
+local-save/
+
 # локальные настройки Claude Code
 .claude/settings.local.json
 .claude/scheduled_tasks.lock
