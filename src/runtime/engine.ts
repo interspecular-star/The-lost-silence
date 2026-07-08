@@ -13,6 +13,7 @@ import {
 import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
 import { ensureUiFxStyles } from './uifx';
+import { ensureTextFxStyles, renderRichInto } from './textfx';
 import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -121,6 +122,7 @@ export class Engine {
     ensureBgFxStyles();
     ensureDialogueFxStyles();
     ensureUiFxStyles();
+    ensureTextFxStyles();
     this.bgLayer = document.createElement('div');
     this.bgLayer.style.cssText = 'position:absolute;inset:0;';
     this.buildBgChain();
@@ -561,7 +563,7 @@ export class Engine {
       if (cls) p.className = cls;
       p.style.whiteSpace = 'pre-wrap';
       if (i > 0) p.style.marginTop = '0.55em';
-      p.textContent = para;
+      renderRichInto(p, para); // разметка [b]/[c=…]/[glitch]… — см. textfx.ts
       target.appendChild(p);
     });
   }
@@ -906,7 +908,7 @@ export class Engine {
         d.style.cursor = 'pointer';
         d.style.userSelect = 'none';
         d.style.transition = 'filter .15s, transform .1s';
-        d.textContent = this.interpolate(el.text ?? '');
+        renderRichInto(d, this.interpolate(el.text ?? ''));
         d.onmouseenter = () => { d.style.filter = 'brightness(1.5)'; };
         d.onmouseleave = () => { d.style.filter = ''; };
         break;
@@ -1320,7 +1322,7 @@ export class Engine {
       else { mark.textContent = '◊'; mark.style.color = 'color-mix(in srgb, var(--dbox-border-accent) 66%, transparent)'; }
       btn.appendChild(mark);
       const txt = document.createElement('span');
-      txt.textContent = this.interpolate(c.text);
+      renderRichInto(txt, this.interpolate(c.text));
       btn.appendChild(txt);
       btn.onmouseenter = () => {
         btn.style.background = t.choiceHover;

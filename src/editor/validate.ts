@@ -10,6 +10,7 @@ import {
 } from '../core/types';
 import { Store } from '../core/store';
 import { h, toast } from './ui';
+import { checkRichMarkup } from '../runtime/textfx';
 
 export interface Issue {
   severity: 'error' | 'warn';
@@ -62,6 +63,9 @@ export function validateProject(p: Project): Issue[] {
     for (const m of (text ?? '').matchAll(/\{(\w+)\}/g)) {
       if (!varByName.has(m[1])) warn(where, `в тексте подстановка {${m[1]}}, но такой переменной нет`, go);
     }
+    // разметка текста ([b], [c=…], [glitch]…) — незакрытые/перепутанные теги
+    const richErr = checkRichMarkup(text ?? '');
+    if (richErr) warn(where, `разметка текста: ${richErr}`, go);
   };
 
   // --- стартовая сцена ---

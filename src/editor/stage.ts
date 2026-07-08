@@ -9,6 +9,7 @@ import {
   CANVAS_W, CANVAS_H, ELEMENT_TYPE_LABELS,
 } from '../core/types';
 import { h } from './ui';
+import { renderRichInto } from '../runtime/textfx';
 
 const RULER = 24;
 const SNAP_SCREEN_PX = 7;
@@ -344,13 +345,14 @@ export class StageView {
 
     switch (el.type) {
       case 'text':
-        d.textContent = el.text ?? '';
+        // разметка [b]/[c=…]/… видна статично (анимации — только в F5/игре)
+        renderRichInto(d, el.text ?? '', { animate: false });
         break;
       case 'button':
         d.style.display = 'flex';
         d.style.alignItems = 'center';
         d.style.justifyContent = s.textAlign === 'left' ? 'flex-start' : s.textAlign === 'right' ? 'flex-end' : 'center';
-        d.textContent = el.text ?? '';
+        renderRichInto(d, el.text ?? '', { animate: false });
         break;
       case 'image':
         if (el.src) {

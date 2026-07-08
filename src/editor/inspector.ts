@@ -9,6 +9,8 @@ import {
   BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
 } from '../core/types';
 import { duplicateElement } from '../core/store';
+import { colorField, backgroundField } from './colorui';
+import { richTextArea } from './richtext';
 import {
   h, row, field, section, textInput, numberInput, textArea,
   selectInput, checkbox, toast, pickImageFile, rangeInput,
@@ -122,8 +124,8 @@ export function mountInspector(root: HTMLElement, store: Store) {
     const bgClear = h('button', { class: 'btn small block danger-ghost', text: '✕ Убрать картинку' });
     bgClear.onclick = () => mutate(() => { scene.bgImage = undefined; });
     root.appendChild(section('Фон',
-      row('Цвет/CSS', textInput(scene.background, (v) => mutate(() => { scene.background = v; }), { placeholder: '#0b1016 или градиент' })),
-      h('div', { class: 'hint', text: 'Можно указать цвет (#0b1016) или CSS-градиент. Например: linear-gradient(180deg, #04070c, #0a1622)' }),
+      backgroundField(scene.background, (v) => mutate(() => { scene.background = v; })),
+      h('div', { class: 'hint', text: 'Образцы и пресеты — быстрый выбор «на глаз». В текстовое поле по-прежнему можно вписать свой цвет или CSS-градиент.' }),
       bgUpload,
       ...(scene.bgImage ? [bgClear] : []),
     ));
@@ -186,17 +188,8 @@ export function mountInspector(root: HTMLElement, store: Store) {
     ));
   }
 
-  function colorRow(value: string, onChange: (v: string) => void): HTMLElement {
-    const wrap = h('div', { style: 'display:flex;gap:6px;' });
-    const color = h('input', { class: 'ed', type: 'color', style: 'flex:0 0 40px;' }) as HTMLInputElement;
-    // input[type=color] понимает только #rrggbb
-    color.value = /^#[0-9a-f]{6}$/i.test(value) ? value : '#4fd1c5';
-    const text = textInput(value, onChange);
-    color.oninput = () => { text.value = color.value; };
-    color.onchange = () => onChange(color.value);
-    wrap.append(color, text);
-    return wrap;
-  }
+  // палитра + пипетка + текст (см. colorui.ts)
+  const colorRow = colorField;
 
   const BG_EFFECT_OPTIONS: [string, string][] = Object.entries(BG_EFFECT_META).map(([k, m]) => [k, m.label]);
 
@@ -277,7 +270,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     // контент
     if (el.type === 'text' || el.type === 'button') {
       root.appendChild(section('Текст',
-        textArea(el.text ?? '', (v) => mutate(() => { el.text = v; }), el.type === 'text' ? 5 : 2),
+        richTextArea(el.text ?? '', (v) => mutate(() => { el.text = v; }), el.type === 'text' ? 5 : 2),
         h('div', { class: 'hint', text: 'Подстановка переменных: напишите {credits} — в игре появится текущее значение переменной с этим именем (кодом).' }),
       ));
     }
@@ -303,7 +296,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     const styleSection = section('Стиль');
     if (el.type !== 'hotspot') {
       if (el.type !== 'text') {
-        styleSection.appendChild(row('Заливка', textInput(s.fill ?? '', (v) => mutate(() => { s.fill = v || undefined; }), { placeholder: 'цвет или rgba(...)' })));
+        styleSection.appendChild(row('Заливка', colorRow(s.fill ?? '', (v) => mutate(() => { s.fill = v || undefined; }))));
       }
       if (el.type === 'text' || el.type === 'button') {
         styleSection.appendChild(row('Цвет текста', colorRow(s.textColor ?? '#e6edf3', (v) => mutate(() => { s.textColor = v; }))));
@@ -326,7 +319,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
         field('Скругление', numberInput(s.radius ?? 0, (v) => mutate(() => { s.radius = v || undefined; }))),
         field('Прозрачность', numberInput(s.opacity ?? 1, (v) => mutate(() => { s.opacity = v >= 1 ? undefined : Math.max(0, v); }))),
         field('Рамка, px', numberInput(s.borderWidth ?? 0, (v) => mutate(() => { s.borderWidth = v || undefined; }))),
-        field('Цвет рамки', textInput(s.borderColor ?? '', (v) => mutate(() => { s.borderColor = v || undefined; }))),
+        field('Цвет рамки', colorRow(s.borderColor ?? '', (v) => mutate(() => { s.borderColor = v || undefined; }))),
       );
       styleSection.appendChild(g2);
       styleSection.appendChild(checkbox(!!s.shadow, (v) => mutate(() => { s.shadow = v || undefined; }), 'тень'));
@@ -491,7 +484,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
       } else {
         sec.appendChild(h('div', { class: 'hint', text: 'Реплика NPC: при первом разговоре игрок «знакомится» с ним, в диалоге виден портрет и (с Осколком ур.1+) шкала отношения.' }));
       }
-      sec.appendChild(textArea(node.text ?? '', (v) => mutate(() => { node.text = v; }), 6));
+      sec.appendChild(richTextArea(node.text ?? '', (v) => mutate(() => { node.text = v; }), 6));
       root.appendChild(sec);
     }
 
@@ -506,7 +499,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
         head.appendChild(h('div', { style: 'flex:1' }));
         head.appendChild(del);
         card.appendChild(head);
-        card.appendChild(textArea(c.text, (v) => mutate(() => { c.text = v; }), 2));
+        card.appendChild(richTextArea(c.text, (v) => mutate(() => { c.text = v; }), 2));
 
         card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:4px;', text: 'Условия показа:' }));
         card.appendChild(conditionsEditor(c.conditions, (list) => mutate(() => { c.conditions = list; })));
