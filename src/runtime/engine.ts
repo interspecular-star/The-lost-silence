@@ -689,18 +689,27 @@ export class Engine {
     }, ms);
   }
 
+  /** Подпись видимого состояния сцены (см. renderScene) */
+  private sceneSig = '';
+
   private renderScene() {
     const scene = this.currentScene;
     if (!scene) return;
-    this.sceneLayer.innerHTML = '';
     this.applyBackgroundConfig(scene);
     this.refreshBgEffects(scene);
 
     const sorted = [...scene.elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
-    for (const el of sorted) {
-      if (el.visible === false) continue;
-      if (!this.checkConditions(el.visibleIf)) continue;
-      this.sceneLayer.appendChild(this.renderElement(el));
+    const visible = sorted.filter((el) => el.visible !== false && this.checkConditions(el.visibleIf));
+    // Пересобираем DOM элементов только если видимый результат изменился:
+    // тик idle/регена зовёт renderScene каждую секунду, и без этой проверки
+    // анимации текста (textfx) перезапускались бы на каждом тике.
+    const sig = scene.id + '|' + visible
+      .map((el) => `${el.id}:${el.type === 'image' ? (el.src?.length ?? 0) : this.interpolate(el.text ?? '')}`)
+      .join('|');
+    if (sig !== this.sceneSig) {
+      this.sceneSig = sig;
+      this.sceneLayer.innerHTML = '';
+      for (const el of visible) this.sceneLayer.appendChild(this.renderElement(el));
     }
     this.renderHUD();
   }
@@ -908,7 +917,7 @@ export class Engine {
         d.style.cursor = 'pointer';
         d.style.userSelect = 'none';
         d.style.transition = 'filter .15s, transform .1s';
-        renderRichInto(d, this.interpolate(el.text ?? ''));
+        renderRichInto(d, this.interpolate(el.text ?? ''), { hoverRoot: d });
         d.onmouseenter = () => { d.style.filter = 'brightness(1.5)'; };
         d.onmouseleave = () => { d.style.filter = ''; };
         break;
@@ -1322,7 +1331,7 @@ export class Engine {
       else { mark.textContent = '◊'; mark.style.color = 'color-mix(in srgb, var(--dbox-border-accent) 66%, transparent)'; }
       btn.appendChild(mark);
       const txt = document.createElement('span');
-      renderRichInto(txt, this.interpolate(c.text));
+      renderRichInto(txt, this.interpolate(c.text), { hoverRoot: btn });
       btn.appendChild(txt);
       btn.onmouseenter = () => {
         btn.style.background = t.choiceHover;

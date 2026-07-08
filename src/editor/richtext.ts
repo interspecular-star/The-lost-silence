@@ -1,21 +1,43 @@
 // Панель стилей текста над textarea: выделил фразу → нажал кнопку →
 // фраза обёрнута тегом разметки ([b], [c=#...], [glitch]... — см. runtime/textfx.ts).
+// У эффектов есть режимы: цикл / один раз / при наведении (для кнопок и вариантов).
 // Виден результат в предпросмотре (F5) и в игре; на холсте редактора — статично.
 
 import { h } from './ui';
-import { TEXTFX_TAGS } from '../runtime/textfx';
+import { TEXTFX_TAGS, defaultMode, FxMode } from '../runtime/textfx';
 import { openPalettePopover } from './colorui';
 
-/** Эффекты для выпадающего меню «✨» (порядок = порядок в меню) */
-const FX_MENU: { tag: string; icon: string }[] = [
-  { tag: 'glow', icon: '✨' },
-  { tag: 'wave', icon: '🌊' },
-  { tag: 'shake', icon: '〰' },
-  { tag: 'glitch', icon: '⚡' },
-  { tag: 'shiny', icon: '✦' },
-  { tag: 'grad', icon: '🌈' },
-  { tag: 'scramble', icon: '▚' },
-  { tag: 'blur', icon: '◌' },
+/** Эффекты для меню «✨», по группам */
+const FX_GROUPS: { title: string; items: { tag: string; icon: string }[] }[] = [
+  {
+    title: 'Цикличные (живут, пока текст на экране)',
+    items: [
+      { tag: 'glow', icon: '✨' },
+      { tag: 'wave', icon: '🌊' },
+      { tag: 'shake', icon: '〰' },
+      { tag: 'glitch', icon: '⚡' },
+      { tag: 'shiny', icon: '✦' },
+      { tag: 'grad', icon: '🌈' },
+      { tag: 'flicker', icon: '💡' },
+    ],
+  },
+  {
+    title: 'Появление (играют один раз, с финалом)',
+    items: [
+      { tag: 'blur', icon: '◌' },
+      { tag: 'rise', icon: '↟' },
+      { tag: 'type', icon: '⌨' },
+      { tag: 'scramble', icon: '▚' },
+      { tag: 'flash', icon: '☀' },
+    ],
+  },
+];
+
+const MODE_CHIPS: { key: 'auto' | FxMode; label: string; hint: string }[] = [
+  { key: 'auto', label: 'Авто', hint: 'Режим по умолчанию: цикличные крутятся, появления играют один раз' },
+  { key: 'loop', label: '⟳ Цикл', hint: 'Повторяется, пока текст на экране' },
+  { key: 'once', label: '1× Раз', hint: 'Проигрывается один раз при показе (цикличные — пара оборотов)' },
+  { key: 'hover', label: '🖱 Навод', hint: 'Запускается при наведении — для кнопок и вариантов ответа' },
 ];
 
 let openMenu: HTMLElement | null = null;
@@ -44,8 +66,8 @@ export function richTextArea(value: string, onCommit: (v: string) => void, rows 
   ta.onblur = commit;
 
   /** Оборачивает выделение тегом; без выделения — вставляет пустую пару */
-  const wrapSel = (tag: string, param?: string) => {
-    const open = param ? `[${tag}=${param}]` : `[${tag}]`;
+  const wrapSel = (tag: string, suffix = '', param?: string) => {
+    const open = param ? `[${tag}${suffix}=${param}]` : `[${tag}${suffix}]`;
     const close = '[/]';
     const s = ta.selectionStart ?? 0;
     const e = ta.selectionEnd ?? 0;
@@ -74,39 +96,74 @@ export function richTextArea(value: string, onCommit: (v: string) => void, rows 
     return b;
   };
 
-  bar.append(
-    mkBtn('Ж', 'Жирный — [b]…[/]', () => wrapSel('b'), 'font-weight:700;'),
-    mkBtn('К', 'Курсив — [i]…[/]', () => wrapSel('i'), 'font-style:italic;'),
-    mkBtn('🎨', 'Цвет слова — [c=#…]…[/]', (b) => openPalettePopover(b, (hex) => wrapSel('c', hex))),
-    mkBtn('✨', 'Эффекты текста', (b) => {
-      closeMenu();
-      const menu = h('div', {
-        style: 'position:fixed;z-index:10000;background:var(--panel,#161b22);border:1px solid var(--border,#2a3038);'
-          + 'border-radius:8px;padding:4px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;min-width:190px;',
+  let fxMode: 'auto' | FxMode = 'auto';
+
+  const openFxMenu = (anchor: HTMLElement) => {
+    closeMenu();
+    const menu = h('div', {
+      style: 'position:fixed;z-index:10000;background:var(--panel,#161b22);border:1px solid var(--border,#2a3038);'
+        + 'border-radius:8px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;min-width:230px;gap:2px;',
+    });
+
+    // выбор режима
+    const chips = h('div', { style: 'display:flex;gap:3px;margin-bottom:4px;' });
+    const chipEls: HTMLElement[] = [];
+    for (const c of MODE_CHIPS) {
+      const chip = h('button', {
+        class: 'btn small' + (fxMode === c.key ? ' accent' : ''),
+        title: c.hint,
+        text: c.label,
+        style: 'flex:1;padding:2px 4px;font-size:11px;',
       });
-      for (const fx of FX_MENU) {
+      chip.onmousedown = (e) => e.preventDefault();
+      chip.onclick = (e) => {
+        e.preventDefault();
+        fxMode = c.key;
+        for (const el of chipEls) el.classList.remove('accent');
+        chip.classList.add('accent');
+      };
+      chipEls.push(chip);
+      chips.appendChild(chip);
+    }
+    menu.appendChild(chips);
+
+    for (const group of FX_GROUPS) {
+      menu.appendChild(h('div', {
+        style: 'font-size:10px;color:var(--text-faint,#5c6773);padding:4px 6px 2px;letter-spacing:0.04em;',
+        text: group.title.toUpperCase(),
+      }));
+      for (const fx of group.items) {
         const spec = TEXTFX_TAGS[fx.tag];
         const item = h('button', {
           class: 'btn small',
-          style: 'justify-content:flex-start;text-align:left;border:none;background:none;padding:5px 8px;',
+          style: 'justify-content:flex-start;text-align:left;border:none;background:none;padding:4px 8px;',
           title: spec.hint,
           text: `${fx.icon} ${spec.label}`,
         });
         item.onmousedown = (e) => e.preventDefault();
         item.onclick = () => {
           closeMenu();
-          if (fx.tag === 'grad') wrapSel('grad', '#4fd1c5,#f4d35e');
-          else wrapSel(fx.tag);
+          const suffix = fxMode === 'auto' || fxMode === defaultMode(fx.tag) ? '' : `.${fxMode}`;
+          if (fx.tag === 'grad') wrapSel('grad', suffix, '#4fd1c5,#f4d35e');
+          else wrapSel(fx.tag, suffix);
         };
         menu.appendChild(item);
       }
-      document.body.appendChild(menu);
-      const r = b.getBoundingClientRect();
-      menu.style.left = `${Math.min(r.left, innerWidth - menu.offsetWidth - 8)}px`;
-      menu.style.top = `${r.bottom + 4 + menu.offsetHeight > innerHeight ? r.top - menu.offsetHeight - 4 : r.bottom + 4}px`;
-      openMenu = menu;
-      document.addEventListener('mousedown', onDocDown, true);
-    }),
+    }
+
+    document.body.appendChild(menu);
+    const r = anchor.getBoundingClientRect();
+    menu.style.left = `${Math.min(r.left, innerWidth - menu.offsetWidth - 8)}px`;
+    menu.style.top = `${r.bottom + 4 + menu.offsetHeight > innerHeight ? Math.max(8, r.top - menu.offsetHeight - 4) : r.bottom + 4}px`;
+    openMenu = menu;
+    document.addEventListener('mousedown', onDocDown, true);
+  };
+
+  bar.append(
+    mkBtn('Ж', 'Жирный — [b]…[/]', () => wrapSel('b'), 'font-weight:700;'),
+    mkBtn('К', 'Курсив — [i]…[/]', () => wrapSel('i'), 'font-style:italic;'),
+    mkBtn('🎨', 'Цвет слова — [c=#…]…[/]', (b) => openPalettePopover(b, (hex) => wrapSel('c', '', hex))),
+    mkBtn('✨', 'Эффекты текста (с выбором режима)', openFxMenu),
   );
 
   const helpBtn = mkBtn('?', 'Подсказка по разметке', () => {
@@ -117,9 +174,11 @@ export function richTextArea(value: string, onCommit: (v: string) => void, rows 
   const help = h('div', {
     class: 'hint',
     style: 'display:none;',
-    text: 'Выделите фразу и нажмите кнопку. Разметка: '
+    text: 'Выделите фразу и нажмите кнопку. Закрытие — [/]. Режимы эффекта: [wave] цикл (по умолчанию для цикличных), '
+      + '[wave.once] один раз, [wave.hover] при наведении (для кнопок/вариантов); появления ([blur], [type]…) '
+      + 'по умолчанию играют один раз. Эффекты: '
       + Object.values(TEXTFX_TAGS).map((t) => `${t.label} ${t.hint}`).join(' · ')
-      + '. Закрывать можно универсальным [/]. Эффекты видны в предпросмотре (F5) и в игре; на холсте — только цвет/жирный/курсив.',
+      + '. На холсте — статично, смотреть в предпросмотре (F5).',
   });
 
   wrap.append(bar, ta, help);
