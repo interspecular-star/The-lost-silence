@@ -370,6 +370,29 @@ export function mountInspector(root: HTMLElement, store: Store) {
     }
     root.appendChild(styleSection);
 
+    // материал кнопки (spatial/анимированная рамка)
+    if (el.type === 'button') {
+      const bs = el.boxStyle ?? {};
+      const setBs = (patch: Partial<NonNullable<typeof el.boxStyle>>) => mutate(() => {
+        el.boxStyle = { ...(el.boxStyle ?? {}), ...patch };
+      });
+      root.appendChild(section('Материал кнопки',
+        row('Поверхность', selectInput(bs.surface ?? 'default',
+          Object.entries(BOX_SURFACE_LABELS) as [string, string][],
+          (v) => setBs({ surface: v as BoxSurface }))),
+        row('Рамка', selectInput(bs.border ?? 'none',
+          Object.entries(BOX_BORDER_LABELS) as [string, string][],
+          (v) => setBs({ border: v as BoxBorderFx }))),
+        ...((bs.border ?? 'none') !== 'none'
+          ? [checkbox(!!bs.hoverOnly, (v) => setBs({ hoverOnly: v || undefined }), 'рамка только при наведении')]
+          : []),
+        ...((bs.surface ?? 'default') === 'spatial'
+          ? [row('Стекло, %', rangeInput(bs.glass ?? 14, 0, 40, 1, (v) => setBs({ glass: v })))]
+          : []),
+        h('div', { class: 'hint', text: 'Скругление берётся из «Стиля» выше. Поверхность видна на холсте, анимации рамки — в предпросмотре (F5) и игре.' }),
+      ));
+    }
+
     // действие
     const actionSection = section('Действие по клику');
     const action = el.action ?? { type: 'none' as const };

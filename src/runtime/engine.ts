@@ -919,6 +919,12 @@ export class Engine {
         d.style.userSelect = 'none';
         d.style.transition = 'filter .15s, transform .1s';
         renderRichInto(d, this.interpolate(el.text ?? ''), { hoverRoot: d });
+        // материал кнопки — ПОСЛЕ renderRichInto (тот очищает содержимое и стёр бы кольцо)
+        if (el.boxStyle) {
+          const bst = { ...el.boxStyle, radius: el.boxStyle.radius ?? s.radius ?? 10 };
+          if ((bst.surface ?? 'default') === 'spatial' && s.fill) d.style.background = glassBg(s.fill, bst);
+          applyBoxFx(d, bst, this.project.theme.accent, { kind: 'button' });
+        }
         d.onmouseenter = () => { d.style.filter = 'brightness(1.5)'; };
         d.onmouseleave = () => { d.style.filter = ''; };
         break;

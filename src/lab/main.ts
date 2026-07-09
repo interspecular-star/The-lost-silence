@@ -21,6 +21,12 @@ const state = {
   cHoverOnly: true,
   cGlass: 14,
   cRadius: 10,
+  // кнопки сцены
+  view: 'dialogue' as 'dialogue' | 'buttons',
+  bSurface: 'spatial' as BoxSurface,
+  bBorder: 'star' as BoxBorderFx,
+  bHoverOnly: false,
+  bGlass: 14,
   factionIdx: 0,
 };
 
@@ -34,14 +40,31 @@ function buildProject(): Project {
   const sceneId = uid('scn');
   const dlgId = uid('dlg');
   const n1 = uid('n'); const n2 = uid('n');
+  const btnStyle = { surface: state.bSurface, border: state.bBorder, hoverOnly: state.bHoverOnly, glass: state.bGlass };
   p.scenes.push({
     id: sceneId,
     name: 'ЛАБ',
     kind: 'location',
     background: 'radial-gradient(ellipse at 50% 30%, #16222e, #05080d)',
-    elements: [],
+    elements: state.view === 'buttons' ? [
+      {
+        id: uid('el'), name: 'Кнопка 1', type: 'button', x: 560, y: 380, w: 800, h: 110,
+        style: { fill: 'rgba(79,209,197,0.10)', textColor: '#4fd1c5', fontSize: 30, radius: 12, textAlign: 'center' },
+        boxStyle: btnStyle, text: 'ВОЙТИ В МАСТЕРСКУЮ',
+      },
+      {
+        id: uid('el'), name: 'Кнопка 2', type: 'button', x: 560, y: 530, w: 800, h: 110,
+        style: { fill: 'rgba(230,237,243,0.06)', textColor: '#e6edf3', fontSize: 30, radius: 12, textAlign: 'center' },
+        boxStyle: btnStyle, text: 'ОСМОТРЕТЬ ПЕРИМЕТР',
+      },
+      {
+        id: uid('el'), name: 'Кнопка 3', type: 'button', x: 560, y: 680, w: 800, h: 110,
+        style: { fill: 'rgba(244,211,94,0.08)', textColor: '#f4d35e', fontSize: 30, radius: 12, textAlign: 'center' },
+        boxStyle: btnStyle, text: '[shiny.hover]ТЕРМИНАЛ OLDNET[/]',
+      },
+    ] : [],
     guides: [],
-    onEnterDialogueId: dlgId,
+    onEnterDialogueId: state.view === 'dialogue' ? dlgId : undefined,
     hudMode: 'off',
   });
   p.dialogues.push({
@@ -149,6 +172,39 @@ function renderPanel() {
   sub.id = 'lab-sub';
   sub.textContent = 'Песочница: проект и автосейв редактора не затрагиваются.';
   panel.append(title, sub);
+
+  panel.appendChild(control('Что показываем', select(state.view,
+    [['dialogue', 'Диалог (блок + варианты)'], ['buttons', 'Кнопки сцены']] as ['dialogue' | 'buttons', string][],
+    (v) => { state.view = v; renderPanel(); rebuild(); })));
+
+  if (state.view === 'buttons') {
+    panel.appendChild(control('Поверхность кнопок', select(state.bSurface,
+      Object.entries(BOX_SURFACE_LABELS) as [BoxSurface, string][],
+      (v) => { state.bSurface = v; renderPanel(); rebuild(); })));
+    panel.appendChild(control('Рамка кнопок', select(state.bBorder,
+      Object.entries(BOX_BORDER_LABELS) as [BoxBorderFx, string][],
+      (v) => { state.bBorder = v; renderPanel(); rebuild(); })));
+    if (state.bBorder !== 'none') {
+      const cbWrap = document.createElement('label');
+      cbWrap.className = 'lab-ctl lab-check';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = state.bHoverOnly;
+      cb.onchange = () => { state.bHoverOnly = cb.checked; rebuild(); };
+      const cbText = document.createElement('span');
+      cbText.textContent = 'рамка только при наведении';
+      cbWrap.append(cb, cbText);
+      panel.appendChild(cbWrap);
+    }
+    if (state.bSurface === 'spatial') {
+      panel.appendChild(control('Стекло кнопок, %', range(state.bGlass, 0, 40, (v) => { state.bGlass = v; rebuild(); })));
+    }
+    const hint = document.createElement('div');
+    hint.id = 'lab-hint';
+    hint.textContent = 'Третья кнопка — с текстовым эффектом [shiny.hover]: блик по тексту при наведении, поверх материала.';
+    panel.appendChild(hint);
+    return;
+  }
 
   panel.appendChild(control('Поверхность', select(state.surface,
     Object.entries(BOX_SURFACE_LABELS) as [BoxSurface, string][],

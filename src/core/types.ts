@@ -88,6 +88,7 @@ export interface SceneElement {
   text?: string;           // для text / button
   src?: string;            // для image (url или data-uri)
   style: ElementStyle;
+  boxStyle?: BoxStyle;     // материал кнопки (spatial/рамка); скругление берётся из style.radius
   action?: ElementAction;
   visibleIf?: Condition[]; // условия видимости в игре
 }

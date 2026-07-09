@@ -10,6 +10,7 @@ import {
 } from '../core/types';
 import { h } from './ui';
 import { renderRichInto } from '../runtime/textfx';
+import { applyBoxFx, glassBg } from '../runtime/boxfx';
 
 const RULER = 24;
 const SNAP_SCREEN_PX = 7;
@@ -352,6 +353,12 @@ export class StageView {
         d.style.display = 'flex';
         d.style.alignItems = 'center';
         d.style.justifyContent = s.textAlign === 'left' ? 'flex-start' : s.textAlign === 'right' ? 'flex-end' : 'center';
+        // материал кнопки: на холсте показываем поверхность статично, без анимаций рамки
+        if (el.boxStyle && (el.boxStyle.surface ?? 'default') === 'spatial') {
+          const bst = { ...el.boxStyle, border: 'none' as const, radius: el.boxStyle.radius ?? s.radius ?? 10 };
+          if (s.fill) d.style.background = glassBg(s.fill, bst);
+          applyBoxFx(d, bst, this.store.project.theme.accent, { kind: 'button' });
+        }
         renderRichInto(d, el.text ?? '', { animate: false });
         break;
       case 'image':
