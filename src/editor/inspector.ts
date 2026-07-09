@@ -274,6 +274,60 @@ export function mountInspector(root: HTMLElement, store: Store) {
       ...borderTuning(cs, setCs),
       materialPreview(t.choiceStyle, t.accent, 'button', t.choiceBg),
     ));
+
+    // ---- библиотека материалов (H2): именованные пресеты проекта ----
+    const libSection = section('Библиотека материалов');
+    const mats = store.project.materials ?? [];
+    if (mats.length === 0) {
+      libSection.appendChild(h('div', { class: 'hint', text: 'Именованные пресеты («Архон», «Допрос», «Костёр»…). Назначаются на NPC, диалог или отдельную реплику — приоритетнее фракции и сцены.' }));
+    }
+    const boxControls = (cur: BoxStyle, set: (patch: Partial<BoxStyle>) => void, kind: 'panel' | 'button'): HTMLElement[] => [
+      row('Поверхность', selectInput(cur.surface ?? 'default',
+        Object.entries(BOX_SURFACE_LABELS) as [string, string][],
+        (v) => set({ surface: v as BoxSurface }))),
+      row('Рамка', selectInput(cur.border ?? 'none',
+        Object.entries(BOX_BORDER_LABELS) as [string, string][],
+        (v) => set({ border: v as BoxBorderFx }))),
+      ...(kind === 'button' && (cur.border ?? 'none') !== 'none'
+        ? [checkbox(!!cur.hoverOnly, (v) => set({ hoverOnly: v || undefined }), 'рамка только при наведении')]
+        : []),
+      ...((cur.surface ?? 'default') === 'spatial' ? [
+        row('Стекло, %', rangeInput(cur.glass ?? 14, 0, 40, 1, (v) => set({ glass: v }))),
+        row('Скругление', rangeInput(cur.radius ?? (kind === 'button' ? 10 : 16), 0, 28, 1, (v) => set({ radius: v }))),
+      ] : []),
+      ...borderTuning(cur, set),
+    ];
+    for (const m of mats) {
+      const card = h('div', { class: 'cond-card' });
+      const head = h('div', { style: 'display:flex;gap:6px;align-items:center;' });
+      head.appendChild(textInput(m.name, (v) => mutate(() => { m.name = v; })));
+      const del = h('button', { class: 'del', text: '✕', title: 'Удалить материал' });
+      del.onclick = () => mutate(() => {
+        store.project.materials = (store.project.materials ?? []).filter((x) => x.id !== m.id);
+      });
+      head.appendChild(del);
+      card.appendChild(head);
+      for (const el of boxControls(m.box, (p) => mutate(() => { Object.assign(m.box, p); }), 'panel')) card.appendChild(el);
+      card.appendChild(materialPreview(m.box, m.box.accent ?? t.accent, 'panel', t.dialogueBox));
+      card.appendChild(checkbox(!!m.choice, (v) => mutate(() => {
+        m.choice = v ? { surface: 'spatial', border: 'none' } : undefined;
+      }), 'свой материал вариантов ответа'));
+      if (m.choice) {
+        const ch = m.choice;
+        for (const el of boxControls(ch, (p) => mutate(() => { Object.assign(ch, p); }), 'button')) card.appendChild(el);
+        card.appendChild(materialPreview(ch, ch.accent ?? t.accent, 'button', t.choiceBg));
+      }
+      libSection.appendChild(card);
+    }
+    const addMat = h('button', { class: 'btn small', text: '+ материал' });
+    addMat.onclick = () => mutate(() => {
+      store.project.materials = [...(store.project.materials ?? []), {
+        id: uid('mat'), name: 'Новый материал', box: { surface: 'spatial', border: 'shimmer' },
+      }];
+    });
+    libSection.appendChild(addMat);
+    libSection.appendChild(h('div', { class: 'hint', text: 'Где назначить: реплика/диалог — в нодовом редакторе; NPC — в «Персонажах». Правка пресета меняет вид везде, где он использован.' }));
+    root.appendChild(libSection);
   }
 
   // палитра + пипетка + текст (см. colorui.ts)
@@ -579,9 +633,44 @@ export function mountInspector(root: HTMLElement, store: Store) {
       root.appendChild(h('div', { class: 'hint', style: 'padding:0 14px;', text: 'Создайте диалог в левой панели.' }));
       return;
     }
+    const matOptions: [string, string][] = [
+      ['', '— авто (NPC/фракция/сцена/тема) —'],
+      ...(store.project.materials ?? []).map((m) => [m.id, m.name] as [string, string]),
+    ];
     root.appendChild(section('Свойства',
       row('Название', textInput(dlg.name, (v) => mutate(() => { dlg.name = v; }))),
+      row('Материал', selectInput(dlg.materialId ?? '', matOptions,
+        (v) => mutate(() => { dlg.materialId = v || undefined; }))),
+      h('div', { class: 'hint', text: 'Материал всего диалога («допрос», «сон»…) — из библиотеки (панель «Мир»). Перекрывает NPC/фракцию/сцену; одну реплику можно перекрасить в её ноде.' }),
     ));
+
+    // динамические правила: условия → материал (первое истинное побеждает)
+    const rulesSec = section('Материал по условиям');
+    for (const r of dlg.materialRules ?? []) {
+      const card = h('div', { class: 'cond-card' });
+      const head = h('div', { style: 'display:flex;gap:6px;align-items:center;' });
+      head.appendChild(selectInput(r.materialId, matOptions.slice(1), (v) => mutate(() => { r.materialId = v; })));
+      const del = h('button', { class: 'del', text: '✕', title: 'Удалить правило' });
+      del.onclick = () => mutate(() => {
+        dlg.materialRules = (dlg.materialRules ?? []).filter((x) => x !== r);
+      });
+      head.appendChild(del);
+      card.appendChild(head);
+      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:4px;', text: 'Когда условия истинны:' }));
+      card.appendChild(conditionsEditor(r.conditions, (list) => mutate(() => { r.conditions = list; })));
+      rulesSec.appendChild(card);
+    }
+    const addRule = h('button', { class: 'btn small', text: '+ правило' });
+    addRule.onclick = () => {
+      const first = (store.project.materials ?? [])[0];
+      if (!first) { toast('Сначала создайте материал в библиотеке (панель «Мир»)', true); return; }
+      mutate(() => {
+        dlg.materialRules = [...(dlg.materialRules ?? []), { conditions: [], materialId: first.id }];
+      });
+    };
+    rulesSec.appendChild(addRule);
+    rulesSec.appendChild(h('div', { class: 'hint', text: 'Живой диалог: «накал ≥ 60 → Сердцебиение». Проверяется на каждой реплике; первое истинное правило побеждает.' }));
+    root.appendChild(rulesSec);
     root.appendChild(section('Подсказки',
       h('div', {
         class: 'hint',
@@ -612,6 +701,12 @@ export function mountInspector(root: HTMLElement, store: Store) {
         sec.appendChild(h('div', { class: 'hint', text: 'Реплика NPC: при первом разговоре игрок «знакомится» с ним, в диалоге виден портрет и (с Осколком ур.1+) шкала отношения.' }));
       }
       sec.appendChild(richTextArea(node.text ?? '', (v) => mutate(() => { node.text = v; }), 6));
+      if ((store.project.materials ?? []).length > 0) {
+        sec.appendChild(row('Материал', selectInput(node.materialId ?? '', [
+          ['', '— как у диалога —'],
+          ...(store.project.materials ?? []).map((m) => [m.id, m.name] as [string, string]),
+        ], (v) => mutate(() => { node.materialId = v || undefined; }))));
+      }
       root.appendChild(sec);
     }
 

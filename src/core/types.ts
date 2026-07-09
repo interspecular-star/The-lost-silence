@@ -194,6 +194,7 @@ export interface DialogueNode {
   nextFalse?: string | null;
   // jump
   gotoSceneId?: string;
+  materialId?: string;      // материал ЭТОЙ реплики (высший приоритет)
 }
 
 export interface Dialogue {
@@ -201,6 +202,8 @@ export interface Dialogue {
   name: string;
   startNodeId: string | null;
   nodes: DialogueNode[];
+  materialId?: string;          // материал всего диалога («допрос», «сон»…)
+  materialRules?: MaterialRule[]; // динамика: условия → материал (выше materialId)
 }
 
 // ---------- Фракции и NPC ----------
@@ -257,6 +260,7 @@ export interface NPC {
   relationships?: NPCRelationship[]; // связи с другими NPC
   relationVarId: string;     // авто-переменная category:'npc' — отношение 0..100
   metVarId: string;          // авто-переменная category:'npc' — знаком ли игрок (boolean)
+  materialId?: string;       // материал диалога этого NPC (выше фракции, ниже диалога)
 }
 
 // ---------- Предметы и герой ----------
@@ -456,6 +460,20 @@ export interface BoxStyle {
   accent?: string;        // свой цвет рамки; пусто = авто (фракция/акцент темы)
 }
 
+/** Именованный материал из библиотеки проекта («Архон», «Допрос», «Костёр»…) */
+export interface MaterialDef {
+  id: string;
+  name: string;
+  box: BoxStyle;        // материал диалогового блока
+  choice?: BoxStyle;    // необязательный материал вариантов ответа
+}
+
+/** Динамическое правило диалога: условия истинны → применяется материал */
+export interface MaterialRule {
+  conditions: Condition[];
+  materialId: string;
+}
+
 // ---------- Тема оформления игры ----------
 export interface Theme {
   font: string;
@@ -491,6 +509,7 @@ export interface Project {
   upgrades?: UpgradeDef[];
   decodes?: DecodeDef[];
   achievements?: AchievementDef[];
+  materials?: MaterialDef[];   // библиотека материалов (H2)
   playtests?: PlaytestCheckpoint[];
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;

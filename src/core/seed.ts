@@ -71,6 +71,27 @@ export function seedProject(): Project {
     dialogues: [],
   };
 
+  // ---- библиотека материалов (H2): стартовые пресеты типов диалогов ----
+  project.materials = [
+    {
+      id: 'mat_archon', name: 'Архон / Mesh',
+      box: { surface: 'spatial', border: 'spectrum', glass: 6, radius: 0, tempo: 'slow' },
+      choice: { surface: 'spatial', border: 'noise', hoverOnly: true, glass: 10, radius: 4 },
+    },
+    {
+      id: 'mat_threat', name: 'Угроза / накал',
+      box: { surface: 'spatial', border: 'heartbeat', glass: 8, radius: 6, accent: '#e06c75' },
+    },
+    {
+      id: 'mat_tech', name: 'Техника / телеметрия',
+      box: { surface: 'spatial', border: 'morse', glass: 8, radius: 2, tempo: 'fast' },
+    },
+    {
+      id: 'mat_warm', name: 'Костёр / доверие',
+      box: { surface: 'spatial', border: 'ember', glass: 16, radius: 20, tempo: 'slow', accent: '#d19a66' },
+    },
+  ];
+
   // ---- фракции ----
   // Материал блока (G4): характер фракции — через поверхность и рамку (сцена > фракция > тема)
   const fFlux = createFaction(project, 'Flux Nomads', '#4fd1c5');

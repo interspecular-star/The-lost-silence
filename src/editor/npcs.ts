@@ -231,6 +231,17 @@ export function mountNPCs(store: Store): HTMLElement {
     }
     fields.appendChild(row3);
 
+    // материал диалога этого NPC (из библиотеки; выше фракции, ниже диалога)
+    if ((store.project.materials ?? []).length > 0) {
+      const rowMat = h('div', { style: 'display:flex;gap:6px;align-items:center;' });
+      rowMat.appendChild(h('span', { style: 'color:var(--text-faint);font-size:11px;flex:0 0 auto;', text: 'материал:' }));
+      rowMat.appendChild(selectInput(npc.materialId ?? '', [
+        ['', '— как у фракции —'],
+        ...(store.project.materials ?? []).map((m) => [m.id, m.name] as [string, string]),
+      ], (v) => mutate(() => { npc.materialId = v || undefined; })));
+      fields.appendChild(rowMat);
+    }
+
     const desc = textArea(npc.description ?? '', (v) => mutate(() => { npc.description = v || undefined; }), 2);
     desc.placeholder = 'Заметки автора: кто это, где встречается…';
     fields.appendChild(desc);

@@ -8,7 +8,7 @@ import {
   Project, Scene, SceneElement, Dialogue, DialogueNode,
   Condition, Effect, VarValue, CANVAS_W, CANVAS_H,
   ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, RARITY_META, Rarity, STAT_LABELS,
-  PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule, Faction,
+  PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule, Faction, MaterialDef,
 } from '../core/types';
 import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
@@ -1193,7 +1193,33 @@ export class Engine {
     return { cls: '', accent: null, faction };
   }
 
-  private makeBox(): HTMLElement {
+  /**
+   * Материал из библиотеки для текущей реплики.
+   * Приоритет: нода > правила диалога (первое истинное) > диалог > NPC.
+   * Ниже (если материал не найден) действует цепочка G4: сцена > фракция > тема.
+   */
+  private resolveMaterial(node?: DialogueNode): MaterialDef | undefined {
+    const mats = this.project.materials ?? [];
+    if (mats.length === 0) return undefined;
+    const byId = (id?: string) => (id ? mats.find((m) => m.id === id) : undefined);
+    const fromNode = byId(node?.materialId);
+    if (fromNode) return fromNode;
+    const dlg = this.currentDialogue;
+    for (const r of dlg?.materialRules ?? []) {
+      if (r.materialId && this.checkConditions(r.conditions)) {
+        const m = byId(r.materialId);
+        if (m) return m;
+      }
+    }
+    const fromDlg = byId(dlg?.materialId);
+    if (fromDlg) return fromDlg;
+    const npc = this.currentSpeakerNpcId
+      ? this.project.npcs?.find((x) => x.id === this.currentSpeakerNpcId)
+      : undefined;
+    return byId(npc?.materialId);
+  }
+
+  private makeBox(node?: DialogueNode): HTMLElement {
     const t = this.project.theme;
     this.dialogueLayer.innerHTML = '';
     const { cls, accent } = this.resolveSkin();
@@ -1208,8 +1234,9 @@ export class Engine {
       border-bottom:1px solid rgba(255,255,255,0.07);
       padding:1.8% 3.2%;pointer-events:auto;
       font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.42;`;
-    // материал блока: сцена > фракция собеседника > тема проекта
-    const boxStyle = this.currentScene?.dialogueBoxStyle
+    // материал блока: библиотека (нода/правила/диалог/NPC) > сцена > фракция > тема
+    const boxStyle = this.resolveMaterial(node)?.box
+      ?? this.currentScene?.dialogueBoxStyle
       ?? this.resolveSkin().faction?.boxStyle
       ?? t.dialogueBoxStyle;
     applyBoxFx(box, boxStyle, accent ?? t.accent);
@@ -1236,7 +1263,7 @@ export class Engine {
     const t = this.project.theme;
     const npc = n.speakerNpcId ? this.project.npcs?.find((x) => x.id === n.speakerNpcId) : undefined;
     this.currentSpeakerNpcId = npc?.id ?? null;
-    const box = this.makeBox();
+    const box = this.makeBox(n);
 
     if (npc) {
       // первое знакомство
@@ -1309,14 +1336,14 @@ export class Engine {
 
   private renderChoice(n: DialogueNode) {
     const t = this.project.theme;
-    const box = this.makeBox();
+    const box = this.makeBox(n);
     const list = document.createElement('div');
     list.className = 'dchoices';
     list.style.cssText = 'display:flex;flex-direction:column;gap:0.5em;';
     box.appendChild(list);
 
-    // материал вариантов: сцена > тема; фон/ховер с учётом стекла, акцент — фракция собеседника
-    const cStyle = this.currentScene?.choiceStyle ?? t.choiceStyle;
+    // материал вариантов: библиотека > сцена > тема; акцент — фракция собеседника
+    const cStyle = this.resolveMaterial(n)?.choice ?? this.currentScene?.choiceStyle ?? t.choiceStyle;
     const choiceAccent = this.resolveSkin().accent ?? t.accent;
     const choiceBg = glassBg(t.choiceBg, cStyle);
     const choiceHoverBg = glassBg(t.choiceHover, cStyle);

@@ -86,6 +86,22 @@ export function validateProject(p: Project): Issue[] {
     seenNames.set(v.name, v);
   }
 
+  // --- материалы (библиотека) ---
+  const matById = new Map((p.materials ?? []).map((m) => [m.id, m]));
+  const checkMat = (id: string | undefined, where: string, go?: Issue['go']) => {
+    if (id && !matById.has(id)) err(where, 'ссылка на удалённый материал из библиотеки', go);
+  };
+  for (const n of p.npcs ?? []) checkMat(n.materialId, `NPC «${n.name}»`, (s) => s.setMode('npc'));
+  for (const d of p.dialogues) {
+    const goDlg = (s: Store) => { s.setMode('dialogue'); s.selectDialogue(d.id); };
+    checkMat(d.materialId, `Диалог «${d.name}»`, goDlg);
+    for (const r of d.materialRules ?? []) {
+      checkMat(r.materialId, `Диалог «${d.name}» — правило материала`, goDlg);
+      checkConds(r.conditions, `Диалог «${d.name}» — правило материала`, goDlg);
+    }
+    for (const n of d.nodes) checkMat(n.materialId, `Диалог «${d.name}», нода`, goDlg);
+  }
+
   // --- сцены и элементы ---
   const referencedScenes = new Set<string>();
   const referencedDialogues = new Set<string>();
