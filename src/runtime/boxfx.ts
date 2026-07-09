@@ -72,13 +72,26 @@ export function applyBoxFx(box: HTMLElement, style: BoxStyle | undefined, accent
   }
 
   if (border !== 'none') {
+    // «Разряд» (SVG-турбулентность) тяжёл для слабых мобильных GPU —
+    // на таких устройствах тихо заменяем его «Дыханием»
+    const fx = border === 'electric' && isWeakDevice() ? 'pulse' : border;
     const ring = document.createElement('div');
-    ring.className = `bfx-ring bfx-${border}` + (style?.hoverOnly ? ' bfx-hoveronly' : '');
+    ring.className = `bfx-ring bfx-${fx}` + (style?.hoverOnly ? ' bfx-hoveronly' : '');
     ring.style.borderRadius = ringRadius;
     if (style?.hoverOnly) box.classList.add('bfx-hover-host');
-    if (border === 'electric') ensureElectricFilter();
+    if (fx === 'electric') ensureElectricFilter();
     box.appendChild(ring);
   }
+}
+
+/** Слабое устройство: телефон/планшет с малым числом ядер или малой памятью */
+function isWeakDevice(): boolean {
+  const coarse = typeof matchMedia !== 'undefined' && matchMedia('(pointer: coarse)').matches;
+  if (!coarse) return false;
+  const nav = navigator as Navigator & { deviceMemory?: number };
+  const lowMem = nav.deviceMemory !== undefined && nav.deviceMemory <= 4;
+  const lowCpu = navigator.hardwareConcurrency !== undefined && navigator.hardwareConcurrency <= 4;
+  return lowMem || lowCpu;
 }
 
 // ---------- SVG-фильтр для «Разряда» ----------
