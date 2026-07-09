@@ -28,6 +28,7 @@ const state = {
   bHoverOnly: false,
   bGlass: 14,
   factionIdx: 0,
+  useFactionMaterial: false, // true — материал фракции (из seed) перекрывает ручки лаборатории
 };
 
 // ---------- проект-песочница ----------
@@ -36,6 +37,9 @@ function buildProject(): Project {
   const factions = p.factions ?? [];
   const faction = factions[state.factionIdx % Math.max(1, factions.length)];
   const npc = p.npcs?.find((n) => n.factionId === faction?.id);
+  // приоритет в движке: сцена > фракция > тема; если ручками рулим темой —
+  // материал фракции убираем, чтобы он не перекрывал настройки панели
+  if (!state.useFactionMaterial) for (const f of factions) delete f.boxStyle;
 
   const sceneId = uid('scn');
   const dlgId = uid('dlg');
@@ -256,6 +260,17 @@ function renderPanel() {
   panel.appendChild(control('Фракция собеседника (скин + цвет)', select(String(state.factionIdx),
     factions.map((f, i) => [String(i), f.name] as [string, string]),
     (v) => { state.factionIdx = Number(v); rebuild(); })));
+
+  const fmWrap = document.createElement('label');
+  fmWrap.className = 'lab-ctl lab-check';
+  const fm = document.createElement('input');
+  fm.type = 'checkbox';
+  fm.checked = state.useFactionMaterial;
+  fm.onchange = () => { state.useFactionMaterial = fm.checked; rebuild(); };
+  const fmText = document.createElement('span');
+  fmText.textContent = 'материал фракции (пресеты проекта)';
+  fmWrap.append(fm, fmText);
+  panel.appendChild(fmWrap);
 
   const hint = document.createElement('div');
   hint.id = 'lab-hint';

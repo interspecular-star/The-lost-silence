@@ -3,7 +3,11 @@
 // ============================================================
 
 import { Store } from '../core/store';
-import { NPC, NPCRelationship, Faction, FactionSkinId, FACTION_SKIN_LABELS, uid } from '../core/types';
+import {
+  NPC, NPCRelationship, Faction, FactionSkinId, FACTION_SKIN_LABELS, uid,
+  BoxSurface, BoxBorderFx,
+} from '../core/types';
+import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS } from '../runtime/boxfx';
 import {
   createNPC, createFaction, deleteNPC, renameNPC, npcPortrait, npcFullPortrait,
 } from '../core/npc';
@@ -46,7 +50,7 @@ export function mountNPCs(store: Store): HTMLElement {
     const table = h('table', { class: 'vars-table' });
     if (factions.length > 0) {
       const thead = h('tr');
-      for (const t of ['Название', 'Цвет', 'Скин диалога', 'Модель голосов', 'Переменная репутации', 'NPC', '']) {
+      for (const t of ['Название', 'Цвет', 'Оформление диалога', 'Модель голосов', 'Переменная репутации', 'NPC', '']) {
         thead.appendChild(h('th', { text: t }));
       }
       table.appendChild(thead);
@@ -70,10 +74,28 @@ export function mountNPCs(store: Store): HTMLElement {
       color.onchange = () => mutate(() => { f.color = color.value; });
       colorWrap.appendChild(color);
       td(colorWrap, '8%');
-      td(selectInput(f.skinId ?? '', [
-        ['', '— как обычно —'],
+      const decor = h('div', { style: 'display:flex;flex-direction:column;gap:4px;' });
+      decor.appendChild(selectInput(f.skinId ?? '', [
+        ['', '— скин: как обычно —'],
         ...Object.entries(FACTION_SKIN_LABELS).map(([k, label]) => [k, label] as [string, string]),
-      ], (v) => mutate(() => { f.skinId = (v || undefined) as FactionSkinId | undefined; })), '20%');
+      ], (v) => mutate(() => { f.skinId = (v || undefined) as FactionSkinId | undefined; })));
+      // материал блока фракции: сцена > фракция > тема (см. runtime/boxfx.ts)
+      const setBs = (patch: Partial<NonNullable<Faction['boxStyle']>>) => mutate(() => {
+        f.boxStyle = { ...(f.boxStyle ?? {}), ...patch };
+      });
+      decor.appendChild(selectInput(f.boxStyle?.surface ?? '', [
+        ['', '— поверхность: как в теме —'],
+        ...Object.entries(BOX_SURFACE_LABELS) as [string, string][],
+      ], (v) => {
+        if (!v && f.boxStyle) mutate(() => { delete f.boxStyle; });
+        else setBs({ surface: v as BoxSurface });
+      }));
+      if (f.boxStyle) {
+        decor.appendChild(selectInput(f.boxStyle.border ?? 'none',
+          Object.entries(BOX_BORDER_LABELS) as [string, string][],
+          (v) => setBs({ border: v as BoxBorderFx })));
+      }
+      td(decor, '20%');
       td(selectInput(f.repMode, [
         ['weighted', 'иерархия (веса важны)'],
         ['equal', 'община (все равны)'],

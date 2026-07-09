@@ -153,6 +153,44 @@ export function mountInspector(root: HTMLElement, store: Store) {
 
     root.appendChild(bgEffectsSection(scene));
 
+    // переопределение материалов на этой сцене (сцена > фракция > тема)
+    const sceneMaterial = (
+      title: string,
+      get: () => Scene['dialogueBoxStyle'],
+      assign: (v: Scene['dialogueBoxStyle']) => void,
+      withHover: boolean,
+    ): HTMLElement[] => {
+      const cur = get();
+      const setPatch = (patch: NonNullable<Scene['dialogueBoxStyle']>) => mutate(() => {
+        assign({ ...(get() ?? {}), ...patch });
+      });
+      const toggle = checkbox(!!cur, (v) => mutate(() => {
+        assign(v ? { surface: 'spatial', border: 'shimmer' } : undefined);
+      }), title);
+      if (!cur) return [toggle];
+      return [
+        toggle,
+        row('Поверхность', selectInput(cur.surface ?? 'default',
+          Object.entries(BOX_SURFACE_LABELS) as [string, string][],
+          (v) => setPatch({ surface: v as BoxSurface }))),
+        row('Рамка', selectInput(cur.border ?? 'none',
+          Object.entries(BOX_BORDER_LABELS) as [string, string][],
+          (v) => setPatch({ border: v as BoxBorderFx }))),
+        ...(withHover && (cur.border ?? 'none') !== 'none'
+          ? [checkbox(!!cur.hoverOnly, (v) => setPatch({ hoverOnly: v || undefined }), 'рамка только при наведении')]
+          : []),
+        ...((cur.surface ?? 'default') === 'spatial' ? [
+          row('Стекло, %', rangeInput(cur.glass ?? 14, 0, 40, 1, (v) => setPatch({ glass: v }))),
+          row('Скругление', rangeInput(cur.radius ?? (withHover ? 10 : 16), 0, 28, 1, (v) => setPatch({ radius: v }))),
+        ] : []),
+      ];
+    };
+    root.appendChild(section('Материалы на этой сцене',
+      ...sceneMaterial('переопределить диалоговый блок', () => scene.dialogueBoxStyle, (v) => { scene.dialogueBoxStyle = v; }, false),
+      ...sceneMaterial('переопределить варианты ответа', () => scene.choiceStyle, (v) => { scene.choiceStyle = v; }, true),
+      h('div', { class: 'hint', text: 'Приоритет: сцена > фракция собеседника > тема проекта. Выключенная галка — сцена наследует общий вид.' }),
+    ));
+
     const dlgOptions: [string, string][] = [['', '— нет —'], ...store.project.dialogues.map((d) => [d.id, d.name] as [string, string])];
     root.appendChild(section('При входе в сцену',
       row('Диалог', selectInput(scene.onEnterDialogueId ?? '', dlgOptions,

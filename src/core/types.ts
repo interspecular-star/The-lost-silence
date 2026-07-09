@@ -113,6 +113,8 @@ export interface Scene {
   guides: Guide[];
   onEnterDialogueId?: string; // диалог, запускаемый при входе в сцену
   hudMode?: 'auto' | 'on' | 'off'; // 'auto' — HUD скрыт на страницах, показан на локациях/уровнях
+  dialogueBoxStyle?: BoxStyle; // переопределение материала диалога на этой сцене (> фракции > темы)
+  choiceStyle?: BoxStyle;      // переопределение материала вариантов на этой сцене (> темы)
 }
 
 // ---------- Настройка фонового изображения ----------
@@ -224,6 +226,7 @@ export interface Faction {
   description?: string;
   repVarId: string;          // авто-переменная category:'computed' — репутация 0..100
   skinId?: FactionSkinId;    // оформление диалогового блока; нет — как сейчас (нейтральная тема)
+  boxStyle?: BoxStyle;       // материал диалогового блока фракции (перекрывает тему, уступает сцене)
 }
 
 /** Связь с другим NPC для экрана профиля персонажа */

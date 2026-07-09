@@ -72,21 +72,28 @@ export function seedProject(): Project {
   };
 
   // ---- фракции ----
+  // Материал блока (G4): характер фракции — через поверхность и рамку (сцена > фракция > тема)
   const fFlux = createFaction(project, 'Flux Nomads', '#4fd1c5');
   fFlux.skinId = 'flux';
+  fFlux.boxStyle = { surface: 'spatial', border: 'pulse' };            // дыхание генераторов
   const fSylv = createFaction(project, 'Sylvarium', '#98c379');
   fSylv.skinId = 'sylvarium';
+  fSylv.boxStyle = { surface: 'spatial', border: 'shimmer', radius: 20 }; // живая, текучая линия
   const fWood = createFaction(project, 'Woodhaven', '#d19a66');
   fWood.repMode = 'equal';
-  fWood.skinId = 'woodhaven';
+  fWood.skinId = 'woodhaven';                                          // анти-глянец: без spatial
   const fCav = createFaction(project, 'Cavernium', '#b39cf0');
   fCav.skinId = 'cavernium';
+  fCav.boxStyle = { surface: 'spatial', glass: 4, radius: 6 };         // плотный, почти без стекла
   const fAer = createFaction(project, 'Aeralis', '#7db8f0');
   fAer.skinId = 'aeralis';
+  fAer.boxStyle = { surface: 'spatial', glass: 30, radius: 22 };       // высота: много воздуха
   const fHyd = createFaction(project, 'Hydrosynth', '#2ec4d6');
   fHyd.skinId = 'hydrosynth';
+  fHyd.boxStyle = { surface: 'spatial', border: 'shimmer', glass: 20, radius: 20 }; // свет в толще воды
   const fNexus = createFaction(project, 'Nexus', '#a8c0cc');
   fNexus.skinId = 'nexus';
+  fNexus.boxStyle = { surface: 'spatial', border: 'scan', glass: 8, radius: 2 };    // стерильный скан
   fNexus.description = 'Планетарная мегаструктура «сглаживания» — администрация, Mesh/CleanNet, Security, наука.';
   void fNexus;
 

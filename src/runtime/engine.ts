@@ -8,7 +8,7 @@ import {
   Project, Scene, SceneElement, Dialogue, DialogueNode,
   Condition, Effect, VarValue, CANVAS_W, CANVAS_H,
   ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, RARITY_META, Rarity, STAT_LABELS,
-  PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule,
+  PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule, Faction,
 } from '../core/types';
 import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
@@ -1182,15 +1182,15 @@ export class Engine {
   }
 
   /** Скин диалогового блока для текущего собеседника (фракция NPC последней реплики) */
-  private resolveSkin(): { cls: string; accent: string | null } {
+  private resolveSkin(): { cls: string; accent: string | null; faction?: Faction } {
     const npc = this.currentSpeakerNpcId
       ? this.project.npcs?.find((x) => x.id === this.currentSpeakerNpcId)
       : undefined;
     const faction = npc?.factionId
       ? this.project.factions?.find((f) => f.id === npc.factionId)
       : undefined;
-    if (faction?.skinId) return { cls: `dskin-${faction.skinId}`, accent: faction.color };
-    return { cls: '', accent: null };
+    if (faction?.skinId) return { cls: `dskin-${faction.skinId}`, accent: faction.color, faction };
+    return { cls: '', accent: null, faction };
   }
 
   private makeBox(): HTMLElement {
@@ -1208,8 +1208,11 @@ export class Engine {
       border-bottom:1px solid rgba(255,255,255,0.07);
       padding:1.8% 3.2%;pointer-events:auto;
       font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.42;`;
-    // материал блока (spatial-стекло + анимированная рамка) — после базовых стилей
-    applyBoxFx(box, t.dialogueBoxStyle, accent ?? t.accent);
+    // материал блока: сцена > фракция собеседника > тема проекта
+    const boxStyle = this.currentScene?.dialogueBoxStyle
+      ?? this.resolveSkin().faction?.boxStyle
+      ?? t.dialogueBoxStyle;
+    applyBoxFx(box, boxStyle, accent ?? t.accent);
     this.dialogueLayer.appendChild(box);
     // форс-reflow, чтобы анимация входа проигрывалась заново на каждой реплике
     void box.offsetWidth;
@@ -1312,14 +1315,15 @@ export class Engine {
     list.style.cssText = 'display:flex;flex-direction:column;gap:0.5em;';
     box.appendChild(list);
 
-    // материал вариантов: фон/ховер с учётом стекла, акцент — фракция собеседника
+    // материал вариантов: сцена > тема; фон/ховер с учётом стекла, акцент — фракция собеседника
+    const cStyle = this.currentScene?.choiceStyle ?? t.choiceStyle;
     const choiceAccent = this.resolveSkin().accent ?? t.accent;
-    const choiceBg = glassBg(t.choiceBg, t.choiceStyle);
-    const choiceHoverBg = glassBg(t.choiceHover, t.choiceStyle);
+    const choiceBg = glassBg(t.choiceBg, cStyle);
+    const choiceHoverBg = glassBg(t.choiceHover, cStyle);
     // цвет левой границы в покое: у классики маркер невидим (transparent),
     // у spatial-пилюли слева та же hairline-рамка, что и по периметру —
     // иначе после первого наведения левая часть обводки «пропадала»
-    const spatialChoice = (t.choiceStyle?.surface ?? 'default') === 'spatial';
+    const spatialChoice = (cStyle?.surface ?? 'default') === 'spatial';
     const idleLeftBorder = spatialChoice
       ? 'color-mix(in srgb, var(--bfx-accent) 18%, rgba(255,255,255,0.05))'
       : 'transparent';
@@ -1342,7 +1346,7 @@ export class Engine {
         padding:0.5em 1em 0.5em 0.9em;cursor:pointer;display:flex;gap:0.8em;
         align-items:baseline;border-left:2px solid transparent;position:relative;overflow:hidden;
         transition:background .15s,border-color .15s;`;
-      applyBoxFx(btn, t.choiceStyle, choiceAccent, { kind: 'button' });
+      applyBoxFx(btn, cStyle, choiceAccent, { kind: 'button' });
       const sheen = document.createElement('div');
       sheen.className = 'dchoice-sheen';
       btn.appendChild(sheen);
