@@ -14,6 +14,7 @@ import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
 import { ensureUiFxStyles } from './uifx';
 import { ensureTextFxStyles, renderRichInto } from './textfx';
+import { applyBoxFx } from './boxfx';
 import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -1201,6 +1202,8 @@ export class Engine {
       border-bottom:1px solid rgba(255,255,255,0.07);
       padding:1.8% 3.2%;pointer-events:auto;
       font-size:calc(30 * 100cqw / ${CANVAS_W});line-height:1.42;`;
+    // материал блока (spatial-стекло + анимированная рамка) — после базовых стилей
+    applyBoxFx(box, t.dialogueBoxStyle, accent ?? t.accent);
     this.dialogueLayer.appendChild(box);
     // форс-reflow, чтобы анимация входа проигрывалась заново на каждой реплике
     void box.offsetWidth;

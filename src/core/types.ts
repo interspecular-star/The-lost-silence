@@ -433,6 +433,17 @@ export interface IdleRule {
   enabled: boolean;
 }
 
+// ---------- «Материалы» блоков (spatial-поверхность + анимированные рамки) ----------
+export type BoxSurface = 'default' | 'spatial';
+export type BoxBorderFx = 'none' | 'shimmer' | 'star' | 'electric' | 'scan' | 'pulse';
+
+export interface BoxStyle {
+  surface?: BoxSurface;   // default = как было; spatial = стекло/скругление/рамка
+  border?: BoxBorderFx;   // анимация рамки (см. runtime/boxfx.ts)
+  glass?: number;         // прозрачность стекла, % (0-40), только spatial; по умолчанию 14
+  radius?: number;        // скругление верхних углов, px; по умолчанию 16
+}
+
 // ---------- Тема оформления игры ----------
 export interface Theme {
   font: string;
@@ -443,6 +454,7 @@ export interface Theme {
   choiceBg: string;
   choiceText: string;
   choiceHover: string;
+  dialogueBoxStyle?: BoxStyle; // материал диалогового блока (нет = классика)
 }
 
 // ---------- Проект ----------

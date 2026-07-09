@@ -7,7 +7,9 @@ import {
   SceneElement, DialogueNode, Condition, Effect, VarValue, VarType,
   ELEMENT_TYPE_LABELS, NODE_TYPE_LABELS, SCENE_KIND_LABELS, uid,
   BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
+  BoxSurface, BoxBorderFx,
 } from '../core/types';
+import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS } from '../runtime/boxfx';
 import { duplicateElement } from '../core/store';
 import { colorField, backgroundField } from './colorui';
 import { richTextArea } from './richtext';
@@ -178,6 +180,10 @@ export function mountInspector(root: HTMLElement, store: Store) {
 
     // тема игры
     const t = store.project.theme;
+    const ds = t.dialogueBoxStyle ?? {};
+    const setDs = (patch: Partial<NonNullable<typeof t.dialogueBoxStyle>>) => mutate(() => {
+      t.dialogueBoxStyle = { ...(t.dialogueBoxStyle ?? {}), ...patch };
+    });
     root.appendChild(section('Оформление игры',
       row('Акцент', colorRow(t.accent, (v) => mutate(() => { t.accent = v; }))),
       row('Окно диалога', textInput(t.dialogueBox, (v) => mutate(() => { t.dialogueBox = v; }))),
@@ -185,6 +191,21 @@ export function mountInspector(root: HTMLElement, store: Store) {
       row('Имя героя', colorRow(t.speakerColor, (v) => mutate(() => { t.speakerColor = v; }))),
       row('Шрифт', textInput(t.font, (v) => mutate(() => { t.font = v; }))),
       h('div', { class: 'hint', text: 'Эти настройки задают вид диалогового окна во всей игре.' }),
+    ));
+
+    // материал диалогового блока (spatial/рамки) — см. runtime/boxfx.ts
+    root.appendChild(section('Материал диалогового блока',
+      row('Поверхность', selectInput(ds.surface ?? 'default',
+        Object.entries(BOX_SURFACE_LABELS) as [string, string][],
+        (v) => setDs({ surface: v as BoxSurface }))),
+      row('Рамка', selectInput(ds.border ?? 'none',
+        Object.entries(BOX_BORDER_LABELS) as [string, string][],
+        (v) => setDs({ border: v as BoxBorderFx }))),
+      ...((ds.surface ?? 'default') === 'spatial' ? [
+        row('Стекло, %', rangeInput(ds.glass ?? 14, 0, 40, 1, (v) => setDs({ glass: v }))),
+        row('Скругление', rangeInput(ds.radius ?? 16, 0, 28, 1, (v) => setDs({ radius: v }))),
+      ] : []),
+      h('div', { class: 'hint', text: 'Видно в предпросмотре (F5) и в игре. Песочница со всеми стилями: страница /style-lab.html на адресе редактора (проект не трогает).' }),
     ));
   }
 
