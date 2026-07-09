@@ -1161,6 +1161,7 @@ export class Engine {
       case 'set':
         if (n.giveItems?.length) this.giveItems(n.giveItems);
         this.applyEffects(n.effects);
+        if (n.whisperId) this.whispers.whisper(n.whisperId); // «прошептать»
         this.advance(n.next);
         return;
       case 'branch':

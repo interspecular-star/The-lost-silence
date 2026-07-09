@@ -5,11 +5,14 @@
 import { Store } from '../core/store';
 import {
   QuestDef, QuestStep, AchievementDef, Condition, Effect, ItemGrant, uid,
+  WhisperDef, WhisperTrigger,
 } from '../core/types';
 import {
   h, textInput, numberInput, selectInput, textArea, checkbox,
   promptModal, confirmModal, toast,
 } from './ui';
+import { richTextArea } from './richtext';
+import { ensureWhisperVars } from '../runtime/whisper';
 
 export function mountQuests(store: Store): HTMLElement {
   const root = h('div', { id: 'vars-wrap' });
@@ -21,6 +24,7 @@ export function mountQuests(store: Store): HTMLElement {
     renderUpgradeList();
     renderDecodeList();
     renderAchievementList();
+    renderWhisperList();
   };
 
   // ---------- общие мини-редакторы ----------
@@ -186,6 +190,128 @@ export function mountQuests(store: Store): HTMLElement {
     });
     wrap.appendChild(add);
     return wrap;
+  }
+
+  // ---------- шёпоты Архона (H3c) ----------
+  function renderWhisperList() {
+    headerRow('◈ Шёпот Архона', '+ Шёпот', async () => {
+      const name = await promptModal('Подпись шёпота (для редактора)', '', 'Например: Комментарий про Кая');
+      if (!name) return;
+      mutate(() => {
+        ensureWhisperVars(store.project); // mesh_on / mesh_ignored / mesh_answered
+        store.project.whispers = store.project.whispers ?? [];
+        store.project.whispers.push({
+          id: uid('w'), name, text: 'Я слышу, как ты думаешь об этом.', trigger: 'enterScene',
+        });
+      });
+    });
+    root.appendChild(h('div', {
+      class: 'hint', style: 'margin-bottom:10px;',
+      text: 'Голос Архона: неблокирующая полоса под HUD. Не звучит, если mesh_on = нет. '
+        + 'Чипы — короткие ответы; молчание игрока считается в mesh_ignored, ответы — в mesh_answered '
+        + '(используйте в условиях диалогов). Обычный шёпот звучит один раз; «повторяемый» — с кулдауном. '
+        + 'Запуск из диалога: нода «Действие» → поле «Прошептать». Демо-песочница: /style-lab.html → «Шёпот Архона».',
+    }));
+
+    const whispers = store.project.whispers ?? [];
+    if (whispers.length === 0) { root.appendChild(h('div', { class: 'hint', text: 'Шёпотов пока нет.' })); return; }
+    const sceneOptions: [string, string][] = [['', '— любая сцена —'],
+      ...store.project.scenes.map((s) => [s.id, s.name] as [string, string])];
+    const dlgOptions: [string, string][] = [['', '— любой диалог —'],
+      ...store.project.dialogues.map((d) => [d.id, d.name] as [string, string])];
+    const replyOptions = (self: WhisperDef): [string, string][] => [['', '— без ответа —'],
+      ...whispers.filter((w) => w.id !== self.id).map((w) => [w.id, w.name] as [string, string])];
+
+    const grid = h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(440px,1fr));gap:12px;' });
+    for (const w of whispers) {
+      const c = cardShell('rgba(126,232,220,0.3)');
+      const r1 = h('div', { style: 'display:flex;gap:6px;' });
+      const nameIn = textInput(w.name, (v) => mutate(() => { w.name = v; }));
+      nameIn.style.fontWeight = '600';
+      r1.appendChild(nameIn);
+      const del = h('button', { class: 'btn small danger-ghost', text: '✕' });
+      del.onclick = async () => {
+        if (!(await confirmModal('Удалить шёпот', `«${w.name}» будет удалён.`))) return;
+        mutate(() => { store.project.whispers = (store.project.whispers ?? []).filter((x) => x.id !== w.id); });
+      };
+      r1.appendChild(del);
+      c.appendChild(r1);
+
+      c.appendChild(richTextArea(w.text, (v) => mutate(() => { w.text = v; }), 3));
+
+      const trigRow = h('div', { style: 'display:flex;gap:6px;align-items:center;flex-wrap:wrap;' });
+      trigRow.appendChild(selectInput(w.trigger, [
+        ['enterScene', 'при входе в сцену'],
+        ['dialogueEnd', 'после диалога'],
+        ['idle', 'в тишине (сам, по кулдауну)'],
+        ['manual', 'вручную (из ноды «Действие»)'],
+      ], (v) => mutate(() => { w.trigger = v as WhisperTrigger; })));
+      if (w.trigger === 'enterScene') {
+        trigRow.appendChild(selectInput(w.sceneId ?? '', sceneOptions, (v) => mutate(() => { w.sceneId = v || undefined; })));
+      }
+      if (w.trigger === 'dialogueEnd') {
+        trigRow.appendChild(selectInput(w.dialogueId ?? '', dlgOptions, (v) => mutate(() => { w.dialogueId = v || undefined; })));
+      }
+      c.appendChild(trigRow);
+
+      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Условия (пусто — всегда можно):' }));
+      c.appendChild(condsMini(w.conditions ?? [], (l) => mutate(() => { w.conditions = l.length ? l : undefined; })));
+
+      const timing = h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:11px;color:var(--text-faint);' });
+      timing.appendChild(h('span', { text: 'задержка, с:' }));
+      const delayIn = numberInput(w.delaySec ?? 0, (v) => mutate(() => { w.delaySec = v || undefined; }));
+      delayIn.style.width = '64px';
+      timing.appendChild(delayIn);
+      timing.appendChild(h('span', { text: 'висит, с:' }));
+      const holdIn = numberInput(w.holdSec ?? 6, (v) => mutate(() => { w.holdSec = v === 6 ? undefined : v; }));
+      holdIn.style.width = '64px';
+      timing.appendChild(holdIn);
+      timing.appendChild(checkbox(!!w.repeatable, (v) => mutate(() => { w.repeatable = v || undefined; }), 'повторяемый'));
+      if (w.repeatable || w.trigger === 'idle') {
+        timing.appendChild(h('span', { text: 'кулдаун, мин:' }));
+        const cdIn = numberInput(w.cooldownMin ?? 3, (v) => mutate(() => { w.cooldownMin = v === 3 ? undefined : v; }));
+        cdIn.style.width = '64px';
+        timing.appendChild(cdIn);
+      }
+      timing.appendChild(checkbox(w.priority === 'important', (v) => mutate(() => {
+        w.priority = v ? 'important' : undefined;
+      }), 'важный (вперёд очереди)'));
+      c.appendChild(timing);
+
+      // чипы-ответы (до 3)
+      c.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Чипы-ответы (пусто — просто реплика):' }));
+      for (const chip of w.chips ?? []) {
+        const box = h('div', { style: 'border:1px solid var(--border);border-radius:6px;padding:6px 8px;display:flex;flex-direction:column;gap:4px;' });
+        const cr = h('div', { style: 'display:flex;gap:4px;align-items:center;' });
+        const chipTxt = textInput(chip.text, (v) => mutate(() => { chip.text = v; }));
+        chipTxt.placeholder = 'Короткий ответ: «Скажи» / «Не лезь»';
+        cr.appendChild(chipTxt);
+        const cdel = h('button', { class: 'btn small danger-ghost', text: '✕' });
+        cdel.onclick = () => mutate(() => {
+          w.chips = (w.chips ?? []).filter((x) => x !== chip);
+          if (w.chips.length === 0) w.chips = undefined;
+        });
+        cr.appendChild(cdel);
+        box.appendChild(cr);
+        box.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Эффекты выбора:' }));
+        box.appendChild(effectsMini(chip.effects, (l) => mutate(() => { chip.effects = l; })));
+        const rr = h('div', { style: 'display:flex;gap:6px;align-items:center;font-size:11px;color:var(--text-faint);' });
+        rr.appendChild(h('span', { text: 'ответный шёпот:' }));
+        rr.appendChild(selectInput(chip.replyWhisperId ?? '', replyOptions(w),
+          (v) => mutate(() => { chip.replyWhisperId = v || undefined; })));
+        box.appendChild(rr);
+        c.appendChild(box);
+      }
+      if ((w.chips?.length ?? 0) < 3) {
+        const addChip = h('button', { class: 'btn small', text: '+ чип', style: 'align-self:flex-start;' });
+        addChip.onclick = () => mutate(() => {
+          (w.chips ??= []).push({ id: uid('wc'), text: 'Ответ', effects: [] });
+        });
+        c.appendChild(addChip);
+      }
+      grid.appendChild(c);
+    }
+    root.appendChild(grid);
   }
 
   function cardShell(borderColor: string): HTMLElement {

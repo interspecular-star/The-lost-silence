@@ -195,6 +195,7 @@ export interface DialogueNode {
   // jump
   gotoSceneId?: string;
   materialId?: string;      // материал ЭТОЙ реплики (высший приоритет)
+  whisperId?: string;       // нода «Действие»: прошептать (канал Архона)
 }
 
 export interface Dialogue {

@@ -102,6 +102,39 @@ export function validateProject(p: Project): Issue[] {
     for (const n of d.nodes) checkMat(n.materialId, `Диалог «${d.name}», нода`, goDlg);
   }
 
+  // --- шёпоты Архона ---
+  const whisperById = new Map((p.whispers ?? []).map((w) => [w.id, w]));
+  for (const w of p.whispers ?? []) {
+    const where = `Шёпот «${w.name}»`;
+    const go: Issue['go'] = (s) => s.setMode('quests');
+    checkConds(w.conditions, where, go);
+    checkInterp(w.text, where, go);
+    if (w.trigger === 'enterScene' && w.sceneId && !sceneById.has(w.sceneId)) err(where, 'сцена триггера удалена', go);
+    if (w.trigger === 'dialogueEnd' && w.dialogueId && !dlgById.has(w.dialogueId)) err(where, 'диалог триггера удалён', go);
+    if (w.trigger === 'manual') {
+      const used = p.dialogues.some((d) => d.nodes.some((n) => n.whisperId === w.id))
+        || (p.whispers ?? []).some((x) => x.chips?.some((c) => c.replyWhisperId === w.id));
+      if (!used) warn(where, 'ручной шёпот нигде не запускается (нода «Действие» или ответный шёпот)', go);
+    }
+    for (const chip of w.chips ?? []) {
+      checkEffects(chip.effects, `${where}, чип «${chip.text}»`, go);
+      if (chip.replyWhisperId && !whisperById.has(chip.replyWhisperId)) {
+        err(`${where}, чип «${chip.text}»`, 'ответный шёпот удалён', go);
+      }
+    }
+    if ((w.chips?.length ?? 0) > 0 && !p.variables.some((v) => v.name === 'mesh_ignored')) {
+      warn(where, 'нет переменной mesh_ignored — молчание игрока не будет считаться (добавьте шёпот через «+ Шёпот», переменные создадутся)', go);
+    }
+  }
+  for (const d of p.dialogues) {
+    for (const n of d.nodes) {
+      if (n.whisperId && !whisperById.has(n.whisperId)) {
+        err(`Диалог «${d.name}», нода «Действие»`, 'ссылка на удалённый шёпот',
+          (s) => { s.setMode('dialogue'); s.selectDialogue(d.id); });
+      }
+    }
+  }
+
   // --- сцены и элементы ---
   const referencedScenes = new Set<string>();
   const referencedDialogues = new Set<string>();

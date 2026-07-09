@@ -745,6 +745,14 @@ export function mountInspector(root: HTMLElement, store: Store) {
       sec.appendChild(itemGrantsEditor(node.giveItems ?? [], (list) => mutate(() => {
         node.giveItems = list.length ? list : undefined;
       })));
+      if ((store.project.whispers ?? []).length > 0) {
+        sec.appendChild(h('div', { class: 'insp-section-title', style: 'margin-top:10px;', text: '◈ Прошептать' }));
+        sec.appendChild(row('Шёпот', selectInput(node.whisperId ?? '', [
+          ['', '— нет —'],
+          ...(store.project.whispers ?? []).map((w) => [w.id, w.name] as [string, string]),
+        ], (v) => mutate(() => { node.whisperId = v || undefined; }))));
+        sec.appendChild(h('div', { class: 'hint', text: 'Голос Архона прозвучит, когда диалог пройдёт эту ноду (если mesh_on). Шёпоты создаются в режиме «Журнал».' }));
+      }
       root.appendChild(sec);
     }
 

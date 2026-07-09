@@ -5,9 +5,25 @@
 // Игру не останавливает; mesh_on=false глушит канал полностью.
 // ============================================================
 
-import { WhisperDef, WhisperChip } from '../core/types';
+import { WhisperDef, WhisperChip, Project } from '../core/types';
 import type { Engine } from './engine';
 import { renderRichInto } from './textfx';
+
+/** Гарантирует переменные канала: mesh_on / mesh_ignored / mesh_answered (для условий) */
+export function ensureWhisperVars(project: Project) {
+  const specs: [string, string, 'boolean' | 'number', boolean | number][] = [
+    ['mesh_on', 'Mesh (Осколок) включён', 'boolean', true],
+    ['mesh_ignored', 'Шёпотов проигнорировано', 'number', 0],
+    ['mesh_answered', 'Ответов голосу', 'number', 0],
+  ];
+  for (const [name, title, type, initial] of specs) {
+    if (!project.variables.some((v) => v.name === name)) {
+      project.variables.push({
+        id: `var_${name}`, name, title, type, initial,
+      } as Project['variables'][number]);
+    }
+  }
+}
 
 /** Запись журнала шёпота (хранится в сейве, последние 50) */
 export interface WhisperLogEntry {
