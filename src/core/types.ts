@@ -439,7 +439,11 @@ export interface IdleRule {
 
 // ---------- «Материалы» блоков (spatial-поверхность + анимированные рамки) ----------
 export type BoxSurface = 'default' | 'spatial';
-export type BoxBorderFx = 'none' | 'shimmer' | 'star' | 'electric' | 'scan' | 'pulse';
+export type BoxBorderFx =
+  | 'none' | 'shimmer' | 'star' | 'electric' | 'scan' | 'pulse'
+  | 'heartbeat' | 'morse' | 'noise' | 'ember' | 'halo' | 'spectrum';
+export type BoxTempo = 'slow' | 'normal' | 'fast';
+export type BoxIntensity = 'quiet' | 'normal' | 'loud';
 
 export interface BoxStyle {
   surface?: BoxSurface;   // default = как было; spatial = стекло/скругление/рамка
@@ -447,6 +451,9 @@ export interface BoxStyle {
   glass?: number;         // прозрачность стекла, % (0-40), только spatial; по умолчанию 14
   radius?: number;        // скругление углов, px; по умолчанию 16 (панель) / 10 (кнопка)
   hoverOnly?: boolean;    // рамка-анимация видна только при наведении (для кнопок/вариантов)
+  tempo?: BoxTempo;       // темп анимации рамки (медленный/обычный/быстрый)
+  intensity?: BoxIntensity; // сила рамки (тише/обычная/ярче)
+  accent?: string;        // свой цвет рамки; пусто = авто (фракция/акцент темы)
 }
 
 // ---------- Тема оформления игры ----------

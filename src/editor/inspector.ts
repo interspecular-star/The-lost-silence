@@ -7,9 +7,9 @@ import {
   SceneElement, DialogueNode, Condition, Effect, VarValue, VarType,
   ELEMENT_TYPE_LABELS, NODE_TYPE_LABELS, SCENE_KIND_LABELS, uid,
   BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
-  BoxSurface, BoxBorderFx,
+  BoxSurface, BoxBorderFx, BoxStyle, BoxTempo, BoxIntensity,
 } from '../core/types';
-import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS } from '../runtime/boxfx';
+import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS, BOX_TEMPO_LABELS, BOX_INTENSITY_LABELS } from '../runtime/boxfx';
 import { materialPreview } from './matpreview';
 import { duplicateElement } from '../core/store';
 import { colorField, backgroundField } from './colorui';
@@ -184,6 +184,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
           row('Стекло, %', rangeInput(cur.glass ?? 14, 0, 40, 1, (v) => setPatch({ glass: v }))),
           row('Скругление', rangeInput(cur.radius ?? (withHover ? 10 : 16), 0, 28, 1, (v) => setPatch({ radius: v }))),
         ] : []),
+        ...borderTuning(cur, setPatch),
         materialPreview(cur, store.project.theme.accent, withHover ? 'button' : 'panel',
           withHover ? store.project.theme.choiceBg : store.project.theme.dialogueBox),
       ];
@@ -246,6 +247,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
         row('Стекло, %', rangeInput(ds.glass ?? 14, 0, 40, 1, (v) => setDs({ glass: v }))),
         row('Скругление', rangeInput(ds.radius ?? 16, 0, 28, 1, (v) => setDs({ radius: v }))),
       ] : []),
+      ...borderTuning(ds, setDs),
       materialPreview(t.dialogueBoxStyle, t.accent, 'panel', t.dialogueBox),
       h('div', { class: 'hint', text: 'Видно в предпросмотре (F5) и в игре. Песочница со всеми стилями: страница /style-lab.html на адресе редактора (проект не трогает).' }),
     ));
@@ -269,12 +271,27 @@ export function mountInspector(root: HTMLElement, store: Store) {
         row('Стекло, %', rangeInput(cs.glass ?? 14, 0, 40, 1, (v) => setCs({ glass: v }))),
         row('Скругление', rangeInput(cs.radius ?? 10, 0, 20, 1, (v) => setCs({ radius: v }))),
       ] : []),
+      ...borderTuning(cs, setCs),
       materialPreview(t.choiceStyle, t.accent, 'button', t.choiceBg),
     ));
   }
 
   // палитра + пипетка + текст (см. colorui.ts)
   const colorRow = colorField;
+
+  /** Общие ручки рамки: темп/сила/свой цвет (показываются, когда рамка выбрана) */
+  function borderTuning(cur: BoxStyle, set: (patch: Partial<BoxStyle>) => void): HTMLElement[] {
+    if ((cur.border ?? 'none') === 'none') return [];
+    return [
+      row('Темп', selectInput(cur.tempo ?? 'normal',
+        Object.entries(BOX_TEMPO_LABELS) as [string, string][],
+        (v) => set({ tempo: v === 'normal' ? undefined : v as BoxTempo }))),
+      row('Сила', selectInput(cur.intensity ?? 'normal',
+        Object.entries(BOX_INTENSITY_LABELS) as [string, string][],
+        (v) => set({ intensity: v === 'normal' ? undefined : v as BoxIntensity }))),
+      row('Цвет рамки', colorRow(cur.accent ?? '', (v) => set({ accent: v || undefined }))),
+    ];
+  }
 
   const BG_EFFECT_OPTIONS: [string, string][] = Object.entries(BG_EFFECT_META).map(([k, m]) => [k, m.label]);
 
@@ -432,6 +449,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
         ...((bs.surface ?? 'default') === 'spatial'
           ? [row('Стекло, %', rangeInput(bs.glass ?? 14, 0, 40, 1, (v) => setBs({ glass: v })))]
           : []),
+        ...borderTuning(bs, setBs),
         materialPreview({ ...bs, radius: bs.radius ?? s.radius ?? 10 }, store.project.theme.accent, 'button', s.fill || 'rgba(79,209,197,0.10)'),
         h('div', { class: 'hint', text: 'Скругление берётся из «Стиля» выше. Поверхность видна на холсте, анимации рамки — в предпросмотре (F5) и игре.' }),
       ));

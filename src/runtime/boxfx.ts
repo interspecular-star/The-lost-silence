@@ -15,6 +15,24 @@ export const BOX_BORDER_LABELS: Record<string, string> = {
   electric: 'Разряд — рамка дрожит живым током',
   scan: 'Скан — редкая вспышка по верхней линии',
   pulse: 'Дыхание — рамка мягко пульсирует',
+  heartbeat: 'Сердцебиение — «тук-тук…пауза», угроза',
+  morse: 'Морзе — бегущий пунктир, передача данных',
+  noise: 'Помехи — тихие срывы линии, скрытый канал',
+  ember: 'Тление — тёплые медленные прогревы',
+  halo: 'Ореол — внешний нимб, больше чем человек',
+  spectrum: 'Спектр — цвет медленно дрейфует',
+};
+
+export const BOX_TEMPO_LABELS: Record<string, string> = {
+  slow: 'Медленный',
+  normal: 'Обычный',
+  fast: 'Быстрый',
+};
+
+export const BOX_INTENSITY_LABELS: Record<string, string> = {
+  quiet: 'Тише',
+  normal: 'Обычная',
+  loud: 'Ярче',
 };
 
 export const BOX_SURFACE_LABELS: Record<string, string> = {
@@ -44,7 +62,12 @@ export function applyBoxFx(box: HTMLElement, style: BoxStyle | undefined, accent
   const kind = opts.kind ?? 'panel';
   const surface = style?.surface ?? 'default';
   const border = style?.border ?? 'none';
-  box.style.setProperty('--bfx-accent', accent);
+  box.style.setProperty('--bfx-accent', style?.accent || accent);
+  // темп и сила: множители длительности анимаций и непрозрачности кольца
+  const dur = style?.tempo === 'slow' ? 1.7 : style?.tempo === 'fast' ? 0.55 : 1;
+  const int = style?.intensity === 'quiet' ? 0.55 : style?.intensity === 'loud' ? 1.35 : 1;
+  if (dur !== 1) box.style.setProperty('--bfx-dur', String(dur));
+  if (int !== 1) box.style.setProperty('--bfx-int', String(int));
 
   const radius = Math.max(0, style?.radius ?? (kind === 'button' ? 10 : 16));
   const ringRadius = surface !== 'spatial' ? '0'
@@ -125,12 +148,14 @@ export function ensureBoxFxStyles() {
   inherits: false;
 }
 
-/* кольцо-рамка: слой поверх границы блока; маска оставляет только обод */
+/* кольцо-рамка: слой поверх границы блока; маска оставляет только обод.
+   --bfx-dur — множитель темпа, --bfx-int — сила (непрозрачность кольца) */
 .bfx-ring {
   position: absolute;
   inset: -1px;
   padding: 2px;
   pointer-events: none;
+  opacity: var(--bfx-int, 1);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
@@ -148,7 +173,7 @@ export function ensureBoxFxStyles() {
     var(--bfx-accent) 82%,
     color-mix(in srgb, var(--bfx-accent) 45%, transparent) 90%,
     transparent 98% 100%);
-  animation: bfx-spin 7s linear infinite;
+  animation: bfx-spin calc(7s * var(--bfx-dur, 1)) linear infinite;
 }
 
 /* --- Комета: яркая голова с хвостом обегает контур (по мотивам StarBorder) --- */
@@ -161,7 +186,7 @@ export function ensureBoxFxStyles() {
     color-mix(in srgb, var(--bfx-accent) 55%, transparent) 94%,
     color-mix(in srgb, var(--bfx-accent) 45%, white) 96.6%,
     transparent 97.4% 100%);
-  animation: bfx-spin 4.6s linear infinite;
+  animation: bfx-spin calc(4.6s * var(--bfx-dur, 1)) linear infinite;
 }
 .bfx-star::after { filter: blur(4px); }
 
@@ -183,7 +208,7 @@ export function ensureBoxFxStyles() {
   height: 2px;
   width: 30%;
   background: linear-gradient(90deg, transparent, var(--bfx-accent), transparent);
-  animation: bfx-scan-a 6s linear infinite;
+  animation: bfx-scan-a calc(6s * var(--bfx-dur, 1)) linear infinite;
 }
 
 /* --- Дыхание: рамка мягко пульсирует яркостью --- */
@@ -193,12 +218,108 @@ export function ensureBoxFxStyles() {
   inset: 0;
   background: var(--bfx-accent);
   opacity: 0.22;
-  animation: bfx-pulse-a 4.2s ease-in-out infinite;
+  animation: bfx-pulse-a calc(4.2s * var(--bfx-dur, 1)) ease-in-out infinite;
+}
+
+/* --- Сердцебиение: «тук-тук…пауза» — не синус, живой ритм угрозы --- */
+.bfx-heartbeat::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bfx-accent);
+  opacity: 0.14;
+  animation: bfx-heart-a calc(1.7s * var(--bfx-dur, 1)) linear infinite;
+}
+@keyframes bfx-heart-a {
+  0%, 34%, 100% { opacity: 0.14; }
+  7% { opacity: 0.72; }
+  14% { opacity: 0.2; }
+  21% { opacity: 0.6; }
+}
+
+/* --- Морзе: бегущий пунктир — передача данных, техника --- */
+.bfx-morse::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg,
+    var(--bfx-accent) 0 14px, transparent 14px 22px,
+    var(--bfx-accent) 22px 27px, transparent 27px 42px);
+  opacity: 0.8;
+  animation: bfx-morse-a calc(2.8s * var(--bfx-dur, 1)) linear infinite;
+}
+@keyframes bfx-morse-a { to { background-position: 42px 0; } }
+
+/* --- Помехи: линия изредка срывается — скрытый канал (тише «Разряда») --- */
+.bfx-noise::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bfx-accent);
+  opacity: 0.5;
+  animation: bfx-noise-a calc(3.6s * var(--bfx-dur, 1)) steps(1, end) infinite;
+}
+@keyframes bfx-noise-a {
+  0%, 100% { transform: translateX(0); opacity: 0.5; }
+  11% { transform: translateX(-0.4%); opacity: 0.25; }
+  12.5% { transform: translateX(0.5%); opacity: 0.7; }
+  14% { transform: translateX(0); opacity: 0.5; }
+  57% { transform: translateX(0.4%); opacity: 0.2; }
+  58.5% { transform: translateX(-0.5%); opacity: 0.65; }
+  60% { transform: translateX(0); opacity: 0.5; }
+}
+
+/* --- Тление: тёплый прогрев медленно ползёт по контуру --- */
+.bfx-ember::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: conic-gradient(from var(--bfx-a) at 50% 50%,
+    transparent 0 30%,
+    color-mix(in srgb, var(--bfx-accent) 35%, transparent) 50%,
+    color-mix(in srgb, var(--bfx-accent) 75%, #ff9a3c) 62%,
+    color-mix(in srgb, var(--bfx-accent) 35%, transparent) 74%,
+    transparent 94% 100%);
+  filter: blur(1.5px);
+  animation: bfx-spin calc(11s * var(--bfx-dur, 1)) linear infinite,
+             bfx-ember-b calc(3.4s * var(--bfx-dur, 1)) ease-in-out infinite;
+}
+@keyframes bfx-ember-b { 50% { opacity: 0.6; } }
+
+/* --- Ореол: без маски — мягкий внешний нимб, дышит --- */
+.bfx-halo {
+  -webkit-mask: none;
+  mask: none;
+  padding: 0;
+  animation: bfx-halo-a calc(5.2s * var(--bfx-dur, 1)) ease-in-out infinite;
+  box-shadow: 0 0 18px 1px color-mix(in srgb, var(--bfx-accent) 40%, transparent),
+              0 0 44px 4px color-mix(in srgb, var(--bfx-accent) 18%, transparent);
+}
+@keyframes bfx-halo-a {
+  50% {
+    box-shadow: 0 0 26px 3px color-mix(in srgb, var(--bfx-accent) 55%, transparent),
+                0 0 64px 8px color-mix(in srgb, var(--bfx-accent) 26%, transparent);
+  }
+}
+
+/* --- Спектр: цвет рамки медленно дрейфует — двойственность, Mesh --- */
+.bfx-spectrum::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--bfx-accent);
+  opacity: 0.6;
+  animation: bfx-spectrum-a calc(9s * var(--bfx-dur, 1)) ease-in-out infinite;
+}
+@keyframes bfx-spectrum-a {
+  0%, 100% { filter: hue-rotate(0deg); opacity: 0.6; }
+  33% { filter: hue-rotate(42deg); opacity: 0.45; }
+  66% { filter: hue-rotate(-38deg); opacity: 0.7; }
 }
 
 /* рамка «только при наведении» (варианты ответа, кнопки) */
 .bfx-hoveronly { opacity: 0; transition: opacity 0.3s ease; }
-.bfx-hover-host:hover > .bfx-hoveronly { opacity: 1; }
+.bfx-hover-host:hover > .bfx-hoveronly { opacity: var(--bfx-int, 1); }
 
 @keyframes bfx-spin { to { --bfx-a: 360deg; } }
 @keyframes bfx-scan-a {
@@ -209,9 +330,11 @@ export function ensureBoxFxStyles() {
 @keyframes bfx-pulse-a { 50% { opacity: 0.6; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .bfx-ring::before, .bfx-ring::after { animation: none !important; filter: none; }
+  .bfx-ring, .bfx-ring::before, .bfx-ring::after { animation: none !important; }
+  .bfx-ring::before, .bfx-ring::after { filter: none; }
   .bfx-electric::before { opacity: 0.35; }
   .bfx-scan::before { display: none; }
+  .bfx-noise::before { transform: none; }
 }
 `;
   document.head.appendChild(st);
