@@ -15,6 +15,7 @@ import { ensureDialogueFxStyles } from './dialoguefx';
 import { ensureUiFxStyles } from './uifx';
 import { ensureTextFxStyles, renderRichInto } from './textfx';
 import { applyBoxFx, glassBg } from './boxfx';
+import { WhisperSystem, WhisperLogEntry } from './whisper';
 import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -46,6 +47,8 @@ interface SaveData {
   qsteps?: Record<string, number>;          // цепочки заданий: id → пройдено этапов
   decode?: { defId: string; startedAt: number } | null;
   achievements?: Record<string, boolean>;   // достижения: id → разблокировано (навсегда)
+  wshown?: string[];                        // шёпоты: уже прозвучавшие (не-repeatable)
+  wlog?: WhisperLogEntry[];                 // журнал шёпота (последние 50)
 }
 
 export class Engine {
@@ -101,6 +104,7 @@ export class Engine {
   upgradeLevels: Record<string, number> = {};
   activeDecode: { defId: string; startedAt: number } | null = null;
   achievements: Record<string, boolean> = {}; // id достижения → разблокировано (навсегда)
+  whispers!: WhisperSystem;                    // канал Архона (H3)
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
   /** NPC последней показанной реплики — определяет фракционный скин диалогового блока */
@@ -144,6 +148,8 @@ export class Engine {
     root.appendChild(this.dialogueLayer);
     root.appendChild(this.invLayer);
     root.addEventListener('pointermove', this.onBgPointerMove);
+    // канал Архона (шёпоты) — свой слой, создаётся после остальных
+    this.whispers = new WhisperSystem(this);
 
     for (const v of project.variables) this.state[v.id] = v.initial;
     this.recomputeDerived();
@@ -197,6 +203,8 @@ export class Engine {
         this.upgradeLevels = save.ups ?? {};
         this.activeDecode = save.decode ?? null;
         this.achievements = save.achievements ?? {};
+        this.whispers.shown = new Set(save.wshown ?? []);
+        this.whispers.log = save.wlog ?? [];
         if (save.sceneId && this.project.scenes.some((s) => s.id === save.sceneId)) {
           startId = save.sceneId;
         }
@@ -261,8 +269,15 @@ export class Engine {
     clearInterval(this.tickTimer);
     clearTimeout(this.saveTimer);
     clearTimeout(this.sceneTransitionTimer);
+    this.whispers?.destroy();
     this.root.removeEventListener('pointermove', this.onBgPointerMove);
   }
+
+  /** Открыт ли сейчас диалог (для правил вежливости шёпота) */
+  isDialogueActive(): boolean { return this.dialogueActive; }
+
+  /** Просьба сохраниться (для подсистем — шёпот и т.п.) */
+  requestSave() { this.scheduleSave(); }
 
   // ---------- фон: постоянные слои + условные эффекты ----------
   /** Создаёт цепочку слоёв фона один раз. Пересоздавать нельзя — иначе анимации будут дёргаться. */
@@ -427,10 +442,12 @@ export class Engine {
     const hasChains = (this.project.quests ?? []).some((q) => q.enabled && q.steps?.length);
     const hasBgEffects = this.project.scenes.some((s) => s.bgEffects?.length);
     const hasAchievements = (this.project.achievements?.length ?? 0) > 0;
-    if (rules.length === 0 && !this.heroEnabled && !hasChains && !hasBgEffects && !hasAchievements) return;
+    const hasWhispers = (this.project.whispers?.length ?? 0) > 0;
+    if (rules.length === 0 && !this.heroEnabled && !hasChains && !hasBgEffects && !hasAchievements && !hasWhispers) return;
     this.tickTimer = window.setInterval(() => {
       if (this.destroyed) return;
       this.applyIdle(1 / 60, false); // тик раз в секунду
+      this.whispers.tick();
       this.regenTick();
       this.checkQuestSteps();
       this.checkAchievements();
@@ -537,6 +554,8 @@ export class Engine {
           qsteps: this.questSteps,
           achievements: this.achievements,
           decode: this.activeDecode,
+          wshown: [...this.whispers.shown],
+          wlog: this.whispers.log,
         };
         localStorage.setItem(this.saveKey(), JSON.stringify(data));
       } catch { /* нет доступа к хранилищу */ }
@@ -667,6 +686,7 @@ export class Engine {
       this.opts.onSceneChanged?.(scene);
       this.scheduleSave();
       if (scene.onEnterDialogueId && !suppressEnter) this.startDialogue(scene.onEnterDialogueId);
+      this.whispers.onSceneEnter(scene.id);
     };
     if (!this.currentScene || this.currentScene.id === scene.id) { apply(); return; }
     this.transitionScene(apply);
@@ -1174,11 +1194,13 @@ export class Engine {
   }
 
   private endDialogue() {
+    const endedId = this.currentDialogue?.id;
     this.currentDialogue = null;
     this.currentSpeakerNpcId = null;
     this.dialogueLayer.innerHTML = '';
     this.dialogueActive = false;
     this.applySceneDim();
+    this.whispers.onDialogueEnd(endedId);
   }
 
   /** Скин диалогового блока для текущего собеседника (фракция NPC последней реплики) */

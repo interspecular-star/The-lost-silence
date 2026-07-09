@@ -460,6 +460,32 @@ export interface BoxStyle {
   accent?: string;        // свой цвет рамки; пусто = авто (фракция/акцент темы)
 }
 
+// ---------- Канал Архона: «шёпоты» (H3, docs/dev/design-whisper.md) ----------
+export type WhisperTrigger = 'enterScene' | 'dialogueEnd' | 'idle' | 'manual';
+
+export interface WhisperChip {
+  id: string;
+  text: string;
+  effects: Effect[];
+  replyWhisperId?: string;  // ответный шёпот после выбора
+}
+
+export interface WhisperDef {
+  id: string;
+  name: string;             // подпись для редактора
+  text: string;             // с разметкой textfx
+  trigger: WhisperTrigger;
+  sceneId?: string;         // enterScene: конкретная сцена (пусто — любая)
+  dialogueId?: string;      // dialogueEnd: конкретный диалог (пусто — любой)
+  conditions?: Condition[];
+  delaySec?: number;        // задержка перед появлением
+  holdSec?: number;         // сколько висит (по умолчанию 6 + длина текста)
+  repeatable?: boolean;     // может звучать повторно (для idle-приветов)
+  cooldownMin?: number;     // для repeatable/idle: не чаще, чем раз в N минут
+  chips?: WhisperChip[];    // 0–3 коротких ответа
+  priority?: 'normal' | 'important'; // important — вперёд очереди
+}
+
 /** Именованный материал из библиотеки проекта («Архон», «Допрос», «Костёр»…) */
 export interface MaterialDef {
   id: string;
@@ -510,6 +536,7 @@ export interface Project {
   decodes?: DecodeDef[];
   achievements?: AchievementDef[];
   materials?: MaterialDef[];   // библиотека материалов (H2)
+  whispers?: WhisperDef[];     // канал Архона (H3)
   playtests?: PlaytestCheckpoint[];
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;

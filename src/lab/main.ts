@@ -22,7 +22,7 @@ const state = {
   cGlass: 14,
   cRadius: 10,
   // кнопки сцены
-  view: 'dialogue' as 'dialogue' | 'buttons',
+  view: 'dialogue' as 'dialogue' | 'buttons' | 'whisper',
   bSurface: 'spatial' as BoxSurface,
   bBorder: 'star' as BoxBorderFx,
   bHoverOnly: false,
@@ -69,7 +69,7 @@ function buildProject(): Project {
     ] : [],
     guides: [],
     onEnterDialogueId: state.view === 'dialogue' ? dlgId : undefined,
-    hudMode: 'off',
+    hudMode: state.view === 'whisper' ? 'on' : 'off', // в режиме шёпота HUD нужен: 📋 → журнал «◈ ГОЛОС»
   });
   p.dialogues.push({
     id: dlgId,
@@ -93,6 +93,43 @@ function buildProject(): Project {
       },
     ],
   });
+  // режим «Шёпот»: набор демо-шёпотов + переменные mesh_*
+  if (state.view === 'whisper') {
+    for (const [name, title, type, initial] of [
+      ['mesh_on', 'Mesh включён', 'boolean', true],
+      ['mesh_ignored', 'Шёпотов проигнорировано', 'number', 0],
+      ['mesh_answered', 'Ответов голосу', 'number', 0],
+    ] as const) {
+      if (!p.variables.some((v) => v.name === name)) {
+        p.variables.push({ id: uid('var'), name, title, type, initial } as never);
+      }
+    }
+    p.whispers = [
+      {
+        id: 'w_hello', name: 'Привет при входе', trigger: 'enterScene', sceneId,
+        text: 'Ты вошёл. Я почувствовал это раньше, чем ты решил.',
+        delaySec: 1,
+      },
+      {
+        id: 'w_chips', name: 'Вопрос с чипами', trigger: 'manual',
+        text: 'Люди Кая пересчитывают склад. [c=#f4d35e]Third bay[/] пуст уже два дня. Сказать ему?',
+        holdSec: 10,
+        chips: [
+          { id: 'c1', text: 'Скажи', effects: [], replyWhisperId: 'w_reply_yes' },
+          { id: 'c2', text: 'Не лезь', effects: [], replyWhisperId: 'w_reply_no' },
+          { id: 'c3', text: 'Замолчи', effects: [] },
+        ],
+      },
+      { id: 'w_reply_yes', name: 'Ответ: скажи', trigger: 'manual', text: 'Сделано. Он услышит это как собственную догадку.' },
+      { id: 'w_reply_no', name: 'Ответ: не лезь', trigger: 'manual', text: 'Как скажешь. Интересный выбор — запомню.' },
+      { id: 'w_q1', name: 'Очередь 1', trigger: 'manual', text: 'Первое: маркеры у периметра сменили цвет час назад.', holdSec: 4 },
+      { id: 'w_q2', name: 'Очередь 2', trigger: 'manual', text: 'Второе: Лия ищет тебя. Снова.', holdSec: 4 },
+      {
+        id: 'w_idle', name: 'Праздный привет', trigger: 'idle', repeatable: true, cooldownMin: 0.5,
+        text: 'Просто проверяю связь. Тишина — это ведь тоже сигнал.',
+      },
+    ];
+  }
   p.startSceneId = sceneId;
   p.theme.dialogueBoxStyle = {
     surface: state.surface,
@@ -131,6 +168,7 @@ function rebuild() {
   const p = buildProject();
   engine = new Engine(p, stage, {});
   engine.start();
+  (window as unknown as { __engine: Engine }).__engine = engine; // для отладки из консоли
 }
 
 // ---------- панель ----------
@@ -178,8 +216,55 @@ function renderPanel() {
   panel.append(title, sub);
 
   panel.appendChild(control('Что показываем', select(state.view,
-    [['dialogue', 'Диалог (блок + варианты)'], ['buttons', 'Кнопки сцены']] as ['dialogue' | 'buttons', string][],
+    [['dialogue', 'Диалог (блок + варианты)'], ['buttons', 'Кнопки сцены'], ['whisper', '◈ Шёпот Архона']] as ['dialogue' | 'buttons' | 'whisper', string][],
     (v) => { state.view = v; renderPanel(); rebuild(); })));
+
+  if (state.view === 'whisper') {
+    const info = document.createElement('div');
+    info.id = 'lab-hint';
+    info.textContent = 'Шёпот при входе появился сам (триггер «вход в сцену»). '
+      + 'Клик по полосе или Q — ответить чипом; не ответить — тоже выбор (mesh_ignored). '
+      + '«Праздный привет» приходит сам раз в ~30 сек тишины. Журнал: кнопка 📋 → «◈ ГОЛОС».';
+    panel.appendChild(info);
+
+    const wbtn = (label: string, fn: () => void) => {
+      const b = document.createElement('button');
+      b.className = 'lab-wbtn';
+      b.textContent = label;
+      b.onclick = fn;
+      panel.appendChild(b);
+    };
+    wbtn('◈ Вопрос с чипами', () => engine?.whispers.whisper('w_chips'));
+    wbtn('◈ Очередь из двух шёпотов', () => { engine?.whispers.whisper('w_q1'); engine?.whispers.whisper('w_q2'); });
+    wbtn('↻ Перезапустить сцену (шёпот при входе)', () => rebuild());
+
+    const meshWrap = document.createElement('label');
+    meshWrap.className = 'lab-ctl lab-check';
+    const mesh = document.createElement('input');
+    mesh.type = 'checkbox';
+    mesh.checked = true;
+    mesh.onchange = () => {
+      const v = engine?.project.variables.find((x) => x.name === 'mesh_on');
+      if (v && engine) engine.state[v.id] = mesh.checked;
+    };
+    const meshText = document.createElement('span');
+    meshText.textContent = 'mesh_on — выключатель Осколка (выкл = мёртвая тишина)';
+    meshWrap.append(mesh, meshText);
+    panel.appendChild(meshWrap);
+
+    const counters = document.createElement('div');
+    counters.id = 'lab-hint';
+    panel.appendChild(counters);
+    setInterval(() => {
+      if (!engine) return;
+      const val = (name: string) => {
+        const v = engine!.project.variables.find((x) => x.name === name);
+        return v ? Number(engine!.state[v.id] ?? 0) : 0;
+      };
+      counters.textContent = `mesh_answered: ${val('mesh_answered')} · mesh_ignored: ${val('mesh_ignored')}`;
+    }, 800);
+    return;
+  }
 
   if (state.view === 'buttons') {
     panel.appendChild(control('Поверхность кнопок', select(state.bSurface,

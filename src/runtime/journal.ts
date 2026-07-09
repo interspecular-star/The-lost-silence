@@ -32,7 +32,8 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
   const p = engine.project;
   const hasCharacters = (p.npcs?.length ?? 0) > 0;
   const hasAchievements = (p.achievements?.length ?? 0) > 0;
-  let tab: 'quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements' = 'quests';
+  const hasVoice = (p.whispers?.length ?? 0) > 0;
+  let tab: 'quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements' | 'voice' = 'quests';
 
   const backdrop = document.createElement('div');
   backdrop.style.cssText = `position:absolute;inset:0;background:rgba(2,4,6,0.72);
@@ -64,10 +65,11 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
   const head = document.createElement('div');
   head.style.cssText = `display:flex;align-items:flex-end;gap:1.8em;
     border-bottom:1px solid rgba(255,255,255,0.07);`;
-  const tabs: ['quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements', string][] = [
+  const tabs: ['quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements' | 'voice', string][] = [
     ['quests', 'КВЕСТЫ'], ['upgrades', 'УЛУЧШЕНИЯ'], ['oldnet', 'АРХИВ OLDNET'],
     ...(hasCharacters ? [['characters', 'ПЕРСОНАЖИ'] as ['characters', string]] : []),
     ...(hasAchievements ? [['achievements', '🏆 ДОСТИЖЕНИЯ'] as ['achievements', string]] : []),
+    ...(hasVoice ? [['voice', '◈ ГОЛОС'] as ['voice', string]] : []),
   ];
   const tabEls = new Map<string, HTMLElement>();
   for (const [key, label] of tabs) {
@@ -539,7 +541,38 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
     else if (tab === 'upgrades') renderUpgrades();
     else if (tab === 'characters') renderCharacters();
     else if (tab === 'achievements') renderAchievements();
+    else if (tab === 'voice') renderVoice();
     else renderOldnet();
+  }
+
+  // ---------- вкладка: голос (журнал шёпота Архона) ----------
+  function renderVoice() {
+    const log = engine.whispers?.log ?? [];
+    if (log.length === 0) {
+      body.appendChild(hint('Голос ещё ничего не говорил.'));
+      return;
+    }
+    for (const e of [...log].reverse()) {
+      const c = card('#7ee8dc');
+      c.style.alignItems = 'baseline';
+      const g = document.createElement('span');
+      g.textContent = '◈';
+      g.style.cssText = 'color:#7ee8dc;flex:0 0 auto;';
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'flex:1;display:flex;flex-direction:column;gap:0.25em;';
+      const t = document.createElement('div');
+      t.textContent = e.text.replace(/\[\/?[a-z]+(?:\.[a-z]+)?(?:=[^\]]*)?\]/gi, ''); // разметку в журнале не оживляем
+      wrap.appendChild(t);
+      if (e.hadChips) {
+        const a = document.createElement('div');
+        a.style.cssText = 'font-size:0.78em;letter-spacing:1px;'
+          + (e.answer ? 'color:#7ee8dc;' : 'color:#5f7a8a;font-style:italic;');
+        a.textContent = e.answer ? `— ${e.answer}` : '— промолчал';
+        wrap.appendChild(a);
+      }
+      c.append(g, wrap);
+      body.appendChild(c);
+    }
   }
 
   render();
