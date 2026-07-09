@@ -207,6 +207,27 @@ export function mountInspector(root: HTMLElement, store: Store) {
       ] : []),
       h('div', { class: 'hint', text: 'Видно в предпросмотре (F5) и в игре. Песочница со всеми стилями: страница /style-lab.html на адресе редактора (проект не трогает).' }),
     ));
+
+    // материал вариантов ответа
+    const cs = t.choiceStyle ?? {};
+    const setCs = (patch: Partial<NonNullable<typeof t.choiceStyle>>) => mutate(() => {
+      t.choiceStyle = { ...(t.choiceStyle ?? {}), ...patch };
+    });
+    root.appendChild(section('Материал вариантов ответа',
+      row('Поверхность', selectInput(cs.surface ?? 'default',
+        Object.entries(BOX_SURFACE_LABELS) as [string, string][],
+        (v) => setCs({ surface: v as BoxSurface }))),
+      row('Рамка', selectInput(cs.border ?? 'none',
+        Object.entries(BOX_BORDER_LABELS) as [string, string][],
+        (v) => setCs({ border: v as BoxBorderFx }))),
+      ...((cs.border ?? 'none') !== 'none'
+        ? [checkbox(!!cs.hoverOnly, (v) => setCs({ hoverOnly: v || undefined }), 'рамка только при наведении')]
+        : []),
+      ...((cs.surface ?? 'default') === 'spatial' ? [
+        row('Стекло, %', rangeInput(cs.glass ?? 14, 0, 40, 1, (v) => setCs({ glass: v }))),
+        row('Скругление', rangeInput(cs.radius ?? 10, 0, 20, 1, (v) => setCs({ radius: v }))),
+      ] : []),
+    ));
   }
 
   // палитра + пипетка + текст (см. colorui.ts)

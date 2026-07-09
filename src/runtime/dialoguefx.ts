@@ -50,14 +50,9 @@ const DIALOGUE_FX_CSS = `
   .dbox, .dbox * { animation: none !important; transition: none !important; opacity: 1 !important; transform: none !important; }
 }
 
-/* ---- Flux Nomads: рабочий город — сварные уголки, пунктир вместо ровной линии ---- */
+/* ---- Flux Nomads: рабочий город — пунктир вместо ровной линии ---- */
+/* (сварные уголки убраны по решению владельца 2026-07-09 — торчали на spatial-стекле) */
 .dskin-flux { border-top-style: dashed; border-top-width: 2px; }
-.dskin-flux::before, .dskin-flux::after {
-  content: ''; position: absolute; width: 14px; height: 14px;
-  border: 1px solid var(--dbox-border-accent); opacity: .8;
-}
-.dskin-flux::before { top: -1px; left: 10px; border-right: none; border-bottom: none; }
-.dskin-flux::after { top: -1px; right: 22px; border-left: none; border-bottom: none; transform: translateY(3px); }
 .dskin-flux .dname { font-weight: 700; }
 
 /* ---- Sylvarium: выращенная форма — мягкие углы, простор в имени ---- */
@@ -98,14 +93,9 @@ const DIALOGUE_FX_CSS = `
   .dskin-hydrosynth { --dskin-loop: none; background-position: 0 0, 50% 0; }
 }
 
-/* ---- Nexus: сертифицированная стерильность — ровные уголки-скобки, сканирующее мерцание ---- */
+/* ---- Nexus: сертифицированная стерильность — сканирующее мерцание ---- */
+/* (уголки-скобки убраны по решению владельца 2026-07-09) */
 .dskin-nexus { border-top-width: 1px; }
-.dskin-nexus::before, .dskin-nexus::after {
-  content: ''; position: absolute; top: -1px; width: 10px; height: 6px;
-  border: 1px solid var(--dbox-border-accent); opacity: .9;
-}
-.dskin-nexus::before { left: 14px; border-right: none; border-bottom: none; }
-.dskin-nexus::after { right: 14px; border-left: none; border-bottom: none; }
 .dskin-nexus .dname { letter-spacing: 3px; font-weight: 600; }
 .dskin-nexus .dname::after {
   content: ''; display: inline-block; width: 4px; height: 4px; margin-left: 6px;

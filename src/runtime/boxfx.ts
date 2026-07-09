@@ -22,35 +22,60 @@ export const BOX_SURFACE_LABELS: Record<string, string> = {
   spatial: 'Spatial — стекло, скругления, рамка',
 };
 
+export interface ApplyBoxOpts {
+  /** panel — диалоговый блок (полоса, скругление сверху); button — вариант/кнопка (пилюля) */
+  kind?: 'panel' | 'button';
+}
+
+/** Фон с учётом стекла: для spatial подмешивает прозрачность, иначе возвращает базу */
+export function glassBg(base: string, style: BoxStyle | undefined): string {
+  if ((style?.surface ?? 'default') !== 'spatial') return base;
+  const glass = Math.min(40, Math.max(0, style?.glass ?? 14));
+  return `color-mix(in srgb, ${base} ${100 - glass}%, transparent)`;
+}
+
 /**
  * Применяет материал к блоку. Вызывать ПОСЛЕ того, как блок получил
  * свои базовые инлайн-стили (мы переопределяем их точечно).
  * accent — цвет рамки (фракция или акцент темы).
  */
-export function applyBoxFx(box: HTMLElement, style: BoxStyle | undefined, accent: string) {
+export function applyBoxFx(box: HTMLElement, style: BoxStyle | undefined, accent: string, opts: ApplyBoxOpts = {}) {
   ensureBoxFxStyles();
+  const kind = opts.kind ?? 'panel';
   const surface = style?.surface ?? 'default';
   const border = style?.border ?? 'none';
   box.style.setProperty('--bfx-accent', accent);
 
-  const radius = Math.max(0, style?.radius ?? 16);
+  const radius = Math.max(0, style?.radius ?? (kind === 'button' ? 10 : 16));
+  const ringRadius = surface !== 'spatial' ? '0'
+    : kind === 'button' ? `${radius}px` : `${radius}px ${radius}px 0 0`;
+
   if (surface === 'spatial') {
     const glass = Math.min(40, Math.max(0, style?.glass ?? 14)); // % прозрачности стекла
     box.classList.add('bfx-spatial');
-    box.style.borderRadius = `${radius}px ${radius}px 0 0`;
-    box.style.background = `color-mix(in srgb, var(--dbox-bg) ${100 - glass}%, transparent)`;
-    box.style.backdropFilter = 'blur(18px) saturate(1.15)';
-    box.style.borderTop = '1px solid color-mix(in srgb, var(--bfx-accent) 26%, transparent)';
-    box.style.borderLeft = '1px solid color-mix(in srgb, var(--bfx-accent) 16%, rgba(255,255,255,0.06))';
-    box.style.borderRight = '1px solid color-mix(in srgb, var(--bfx-accent) 16%, rgba(255,255,255,0.06))';
-    box.style.borderBottom = 'none';
-    box.style.boxShadow = '0 -12px 44px rgba(0,0,0,0.35)';
+    if (kind === 'panel') {
+      box.style.borderRadius = `${radius}px ${radius}px 0 0`;
+      box.style.background = `color-mix(in srgb, var(--dbox-bg) ${100 - glass}%, transparent)`;
+      box.style.backdropFilter = 'blur(18px) saturate(1.15)';
+      box.style.borderTop = '1px solid color-mix(in srgb, var(--bfx-accent) 26%, transparent)';
+      box.style.borderLeft = '1px solid color-mix(in srgb, var(--bfx-accent) 16%, rgba(255,255,255,0.06))';
+      box.style.borderRight = '1px solid color-mix(in srgb, var(--bfx-accent) 16%, rgba(255,255,255,0.06))';
+      box.style.borderBottom = 'none';
+      box.style.boxShadow = '0 -12px 44px rgba(0,0,0,0.35)';
+    } else {
+      // кнопка: скругление со всех сторон, hairline по периметру;
+      // фон НЕ трогаем — вызывающий сам ставит glassBg(база/hover)
+      box.style.borderRadius = `${radius}px`;
+      box.style.border = '1px solid color-mix(in srgb, var(--bfx-accent) 18%, rgba(255,255,255,0.05))';
+      box.style.backdropFilter = 'blur(10px)';
+    }
   }
 
   if (border !== 'none') {
     const ring = document.createElement('div');
-    ring.className = `bfx-ring bfx-${border}`;
-    ring.style.borderRadius = surface === 'spatial' ? `${radius}px ${radius}px 0 0` : '0';
+    ring.className = `bfx-ring bfx-${border}` + (style?.hoverOnly ? ' bfx-hoveronly' : '');
+    ring.style.borderRadius = ringRadius;
+    if (style?.hoverOnly) box.classList.add('bfx-hover-host');
     if (border === 'electric') ensureElectricFilter();
     box.appendChild(ring);
   }
@@ -157,6 +182,10 @@ export function ensureBoxFxStyles() {
   opacity: 0.22;
   animation: bfx-pulse-a 4.2s ease-in-out infinite;
 }
+
+/* рамка «только при наведении» (варианты ответа, кнопки) */
+.bfx-hoveronly { opacity: 0; transition: opacity 0.3s ease; }
+.bfx-hover-host:hover > .bfx-hoveronly { opacity: 1; }
 
 @keyframes bfx-spin { to { --bfx-a: 360deg; } }
 @keyframes bfx-scan-a {

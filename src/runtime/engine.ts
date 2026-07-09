@@ -14,7 +14,7 @@ import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
 import { ensureUiFxStyles } from './uifx';
 import { ensureTextFxStyles, renderRichInto } from './textfx';
-import { applyBoxFx } from './boxfx';
+import { applyBoxFx, glassBg } from './boxfx';
 import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -1306,6 +1306,11 @@ export class Engine {
     list.style.cssText = 'display:flex;flex-direction:column;gap:0.5em;';
     box.appendChild(list);
 
+    // материал вариантов: фон/ховер с учётом стекла, акцент — фракция собеседника
+    const choiceAccent = this.resolveSkin().accent ?? t.accent;
+    const choiceBg = glassBg(t.choiceBg, t.choiceStyle);
+    const choiceHoverBg = glassBg(t.choiceHover, t.choiceStyle);
+
     const available = (n.choices ?? []).filter((c) => this.checkConditions(c.conditions));
     const relIds = new Set((this.project.npcs ?? []).map((x) => x.relationVarId));
     for (const c of available) {
@@ -1320,10 +1325,11 @@ export class Engine {
       }
       const btn = document.createElement('div');
       btn.className = 'dchoice';
-      btn.style.cssText = `background:${t.choiceBg};color:${t.choiceText};
+      btn.style.cssText = `background:${choiceBg};color:${t.choiceText};
         padding:0.5em 1em 0.5em 0.9em;cursor:pointer;display:flex;gap:0.8em;
         align-items:baseline;border-left:2px solid transparent;position:relative;overflow:hidden;
         transition:background .15s,border-color .15s;`;
+      applyBoxFx(btn, t.choiceStyle, choiceAccent, { kind: 'button' });
       const sheen = document.createElement('div');
       sheen.className = 'dchoice-sheen';
       btn.appendChild(sheen);
@@ -1337,14 +1343,14 @@ export class Engine {
       renderRichInto(txt, this.interpolate(c.text), { hoverRoot: btn });
       btn.appendChild(txt);
       btn.onmouseenter = () => {
-        btn.style.background = t.choiceHover;
+        btn.style.background = choiceHoverBg;
         btn.style.borderLeftColor = 'var(--dbox-border-accent)';
         sheen.classList.remove('play');
         void sheen.offsetWidth; // форс-reflow — блик переигрывается при каждом наведении
         sheen.classList.add('play');
       };
       btn.onmouseleave = () => {
-        btn.style.background = t.choiceBg;
+        btn.style.background = choiceBg;
         btn.style.borderLeftColor = 'transparent';
       };
       btn.onclick = () => {

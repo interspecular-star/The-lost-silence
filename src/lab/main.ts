@@ -6,15 +6,21 @@
 
 import { seedProject } from '../core/seed';
 import { Engine, fitStage } from '../runtime/engine';
-import { Project, BoxStyle, BoxSurface, BoxBorderFx, uid } from '../core/types';
+import { Project, BoxSurface, BoxBorderFx, uid } from '../core/types';
 import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS } from '../runtime/boxfx';
 
 // ---------- текущее состояние лаборатории ----------
-const state: Required<BoxStyle> & { factionIdx: number } = {
-  surface: 'spatial',
-  border: 'shimmer',
+const state = {
+  surface: 'spatial' as BoxSurface,
+  border: 'shimmer' as BoxBorderFx,
   glass: 14,
   radius: 16,
+  // варианты ответа
+  cSurface: 'spatial' as BoxSurface,
+  cBorder: 'none' as BoxBorderFx,
+  cHoverOnly: true,
+  cGlass: 14,
+  cRadius: 10,
   factionIdx: 0,
 };
 
@@ -66,6 +72,13 @@ function buildProject(): Project {
     border: state.border,
     glass: state.glass,
     radius: state.radius,
+  };
+  p.theme.choiceStyle = {
+    surface: state.cSurface,
+    border: state.cBorder,
+    hoverOnly: state.cHoverOnly,
+    glass: state.cGlass,
+    radius: state.cRadius,
   };
   return p;
 }
@@ -148,6 +161,38 @@ function renderPanel() {
   if (state.surface === 'spatial') {
     panel.appendChild(control('Стекло, % прозрачности', range(state.glass, 0, 40, (v) => { state.glass = v; rebuild(); })));
     panel.appendChild(control('Скругление, px', range(state.radius, 0, 28, (v) => { state.radius = v; rebuild(); })));
+  }
+
+  // --- варианты ответа ---
+  const sep = document.createElement('div');
+  sep.id = 'lab-sep';
+  sep.textContent = 'ВАРИАНТЫ ОТВЕТА';
+  panel.appendChild(sep);
+
+  panel.appendChild(control('Поверхность вариантов', select(state.cSurface,
+    Object.entries(BOX_SURFACE_LABELS) as [BoxSurface, string][],
+    (v) => { state.cSurface = v; renderPanel(); rebuild(); })));
+
+  panel.appendChild(control('Рамка вариантов', select(state.cBorder,
+    Object.entries(BOX_BORDER_LABELS) as [BoxBorderFx, string][],
+    (v) => { state.cBorder = v; renderPanel(); rebuild(); })));
+
+  if (state.cBorder !== 'none') {
+    const cbWrap = document.createElement('label');
+    cbWrap.className = 'lab-ctl lab-check';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = state.cHoverOnly;
+    cb.onchange = () => { state.cHoverOnly = cb.checked; rebuild(); };
+    const cbText = document.createElement('span');
+    cbText.textContent = 'рамка только при наведении';
+    cbWrap.append(cb, cbText);
+    panel.appendChild(cbWrap);
+  }
+
+  if (state.cSurface === 'spatial') {
+    panel.appendChild(control('Стекло вариантов, %', range(state.cGlass, 0, 40, (v) => { state.cGlass = v; rebuild(); })));
+    panel.appendChild(control('Скругление вариантов, px', range(state.cRadius, 0, 20, (v) => { state.cRadius = v; rebuild(); })));
   }
 
   const p = seedProject();

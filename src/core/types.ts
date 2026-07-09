@@ -441,7 +441,8 @@ export interface BoxStyle {
   surface?: BoxSurface;   // default = как было; spatial = стекло/скругление/рамка
   border?: BoxBorderFx;   // анимация рамки (см. runtime/boxfx.ts)
   glass?: number;         // прозрачность стекла, % (0-40), только spatial; по умолчанию 14
-  radius?: number;        // скругление верхних углов, px; по умолчанию 16
+  radius?: number;        // скругление углов, px; по умолчанию 16 (панель) / 10 (кнопка)
+  hoverOnly?: boolean;    // рамка-анимация видна только при наведении (для кнопок/вариантов)
 }
 
 // ---------- Тема оформления игры ----------
@@ -455,6 +456,7 @@ export interface Theme {
   choiceText: string;
   choiceHover: string;
   dialogueBoxStyle?: BoxStyle; // материал диалогового блока (нет = классика)
+  choiceStyle?: BoxStyle;      // материал вариантов ответа (нет = классика)
 }
 
 // ---------- Проект ----------
