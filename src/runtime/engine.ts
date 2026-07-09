@@ -1310,6 +1310,13 @@ export class Engine {
     const choiceAccent = this.resolveSkin().accent ?? t.accent;
     const choiceBg = glassBg(t.choiceBg, t.choiceStyle);
     const choiceHoverBg = glassBg(t.choiceHover, t.choiceStyle);
+    // цвет левой границы в покое: у классики маркер невидим (transparent),
+    // у spatial-пилюли слева та же hairline-рамка, что и по периметру —
+    // иначе после первого наведения левая часть обводки «пропадала»
+    const spatialChoice = (t.choiceStyle?.surface ?? 'default') === 'spatial';
+    const idleLeftBorder = spatialChoice
+      ? 'color-mix(in srgb, var(--bfx-accent) 18%, rgba(255,255,255,0.05))'
+      : 'transparent';
 
     const available = (n.choices ?? []).filter((c) => this.checkConditions(c.conditions));
     const relIds = new Set((this.project.npcs ?? []).map((x) => x.relationVarId));
@@ -1351,7 +1358,7 @@ export class Engine {
       };
       btn.onmouseleave = () => {
         btn.style.background = choiceBg;
-        btn.style.borderLeftColor = 'transparent';
+        btn.style.borderLeftColor = idleLeftBorder;
       };
       btn.onclick = () => {
         this.applyEffects(c.effects);
