@@ -153,6 +153,14 @@ function openExportDialog(store: Store) {
       + 'Выбор конкретной сцены/чекпоинта перекрывает и стартовую, и сейв — каждый запуск начинается там (для демо и тестов).',
   }));
 
+  // перенос сейвов: по умолчанию каждая сборка начинается с чистого листа —
+  // старые сохранения в браузере не уводят игру на давно удалённые сцены
+  const keepWrap = h('label', { style: 'display:flex;gap:8px;align-items:center;font-size:12px;color:var(--text-dim,#9aa7b4);cursor:pointer;' });
+  const keep = h('input', { type: 'checkbox' }) as HTMLInputElement;
+  const keepText = h('span', { text: 'переносить сохранения из прошлых сборок (для обновлений опубликованной игры)' });
+  keepWrap.append(keep, keepText);
+  panel.appendChild(keepWrap);
+
   const btnRow = h('div', { style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:4px;' });
   const cancel = h('button', { class: 'btn', text: 'Отмена' });
   cancel.onclick = () => backdrop.remove();
@@ -160,9 +168,10 @@ function openExportDialog(store: Store) {
   go.onclick = async () => {
     try {
       const v = sel.value;
-      const boot = v === 'project' ? undefined
+      const boot: import('../core/storage').ExportBoot = v === 'project' ? {}
         : v.startsWith('scene:') ? { startSceneId: v.slice(6) }
         : { checkpoint: (p.playtests ?? []).find((cp) => cp.id === v.slice(3)) };
+      if (!keep.checked) boot.buildId = String(Date.now()); // сейвы чужих сборок игнорируются
       await exportGame(p, boot);
       backdrop.remove();
       toast('Игра экспортирована: один HTML-файл, работает на PC и мобильных');

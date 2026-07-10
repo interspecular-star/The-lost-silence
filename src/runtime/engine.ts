@@ -35,6 +35,9 @@ export interface EngineOptions {
   checkpoint?: PlaytestCheckpoint | null;
   /** Плейтест: начать с этой сцены (приоритетнее сцены чекпоинта) */
   startSceneId?: string | null;
+  /** Штамп сборки (экспорт): сейв от другой сборки игнорируется — старые
+   *  сохранения в браузере не уводят новую сборку на давно удалённые сцены */
+  buildId?: string;
 }
 
 interface SaveData {
@@ -50,6 +53,7 @@ interface SaveData {
   achievements?: Record<string, boolean>;   // достижения: id → разблокировано (навсегда)
   wshown?: string[];                        // шёпоты: уже прозвучавшие (не-repeatable)
   wlog?: WhisperLogEntry[];                 // журнал шёпота (последние 50)
+  buildId?: string;                         // штамп сборки, записавшей сейв
 }
 
 export class Engine {
@@ -538,6 +542,8 @@ export class Engine {
       const raw = localStorage.getItem(this.saveKey());
       if (!raw) return null;
       const s = JSON.parse(raw);
+      // сейв другой сборки не подхватываем (мог указывать на удалённые сцены)
+      if (this.opts.buildId && s?.buildId !== this.opts.buildId) return null;
       if (s && typeof s.savedAt === 'number' && s.vars) return s as SaveData;
     } catch { /* повреждено или нет доступа */ }
     return null;
@@ -561,6 +567,7 @@ export class Engine {
           decode: this.activeDecode,
           wshown: [...this.whispers.shown],
           wlog: this.whispers.log,
+          buildId: this.opts.buildId,
         };
         localStorage.setItem(this.saveKey(), JSON.stringify(data));
       } catch { /* нет доступа к хранилищу */ }

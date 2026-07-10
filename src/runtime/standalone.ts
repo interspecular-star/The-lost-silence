@@ -10,7 +10,7 @@ declare global {
   interface Window {
     __TLS_PROJECT__?: Project;
     /** Настройки старта сборки (см. storage.exportGame): сцена и/или чекпоинт */
-    __TLS_BOOT__?: { startSceneId?: string; checkpoint?: PlaytestCheckpoint };
+    __TLS_BOOT__?: { startSceneId?: string; checkpoint?: PlaytestCheckpoint; buildId?: string };
   }
 }
 
@@ -35,6 +35,7 @@ function boot() {
     // чекпоинт — снимок переменных/инвентаря для демо-сборок с середины игры
     startSceneId: boot?.startSceneId,
     checkpoint: boot?.checkpoint,
+    buildId: boot?.buildId,
   });
   engine.start();
 }

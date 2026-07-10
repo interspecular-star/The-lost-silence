@@ -62,6 +62,8 @@ export interface ExportBoot {
   startSceneId?: string;
   /** Стартовать с чекпоинта плейтеста (демо-сборки с середины игры) */
   checkpoint?: PlaytestCheckpoint;
+  /** Штамп сборки: сейвы других сборок игнорируются (нет — сейвы переносятся) */
+  buildId?: string;
 }
 
 /**
@@ -75,7 +77,7 @@ export async function exportGame(project: Project, boot?: ExportBoot) {
 
   // JSON внутри <script>: экранируем закрывающие теги
   const data = JSON.stringify(project).replace(/<\//g, '<\\/');
-  const bootData = boot && (boot.startSceneId || boot.checkpoint)
+  const bootData = boot && (boot.startSceneId || boot.checkpoint || boot.buildId)
     ? JSON.stringify(boot).replace(/<\//g, '<\\/')
     : null;
 
