@@ -13,7 +13,7 @@ import {
 import { ensureBgFxStyles } from './bgfx';
 import { ensureDialogueFxStyles } from './dialoguefx';
 import { ensureUiFxStyles } from './uifx';
-import { ensureTextFxStyles, renderRichInto } from './textfx';
+import { ensureTextFxStyles, renderRichInto, splitRichParagraphs } from './textfx';
 import { applyBoxFx, glassBg } from './boxfx';
 import { WhisperSystem, WhisperLogEntry } from './whisper';
 import { applyElementFx } from './elementfx';
@@ -580,10 +580,11 @@ export class Engine {
     });
   }
 
-  /** Текст с абзацами: двойной перенос строки даёт компактный отступ вместо целой пустой строки */
+  /** Текст с абзацами: двойной перенос строки даёт компактный отступ вместо целой пустой строки.
+   *  Разметка textfx протаскивается через абзацы (splitRichParagraphs). */
   private setParagraphs(target: HTMLElement, text: string, cls?: string) {
     target.textContent = '';
-    text.split(/\n{2,}/).forEach((para, i) => {
+    splitRichParagraphs(text).forEach((para, i) => {
       const p = document.createElement('div');
       if (cls) p.className = cls;
       p.style.whiteSpace = 'pre-wrap';

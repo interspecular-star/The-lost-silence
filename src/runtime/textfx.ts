@@ -94,32 +94,55 @@ function resolveUniversalCloses(text: string): string {
 
 /**
  * Проверка разметки для валидатора. Возвращает текст первой проблемы или null.
- * Проверяет каждый абзац отдельно — движок рисует абзацы независимо,
- * тег не может тянуться через пустую строку.
+ * Теги могут тянуться через пустую строку (движок протаскивает их по абзацам
+ * через splitRichParagraphs), поэтому проверяем текст целиком.
  */
 export function checkRichMarkup(text: string): string | null {
-  for (const para of text.split(/\n{2,}/)) {
-    const resolved = resolveUniversalCloses(para);
-    const stack: string[] = [];
+  const resolved = resolveUniversalCloses(text);
+  const stack: string[] = [];
+  TAG_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = TAG_RE.exec(resolved))) {
+    const name = m[2].toLowerCase();
+    if (!TEXTFX_TAGS[name]) continue; // неизвестное — обычный текст
+    if (m[1]) {
+      if (stack.length === 0) return `закрывающий [/${name}] без открывающего`;
+      const top = stack.pop()!;
+      if (top !== name) return `тег [${top}] закрыт как [/${name}]`;
+    } else {
+      if (m[3] && !MODES.includes(m[3].toLowerCase() as FxMode)) {
+        return `у тега [${name}] неизвестный режим «.${m[3]}» (есть .loop / .once / .hover)`;
+      }
+      stack.push(name);
+    }
+  }
+  if (stack.length > 0) return `тег [${stack[stack.length - 1]}] не закрыт (нужен [/${stack[stack.length - 1]}] или [/])`;
+  return null;
+}
+
+/**
+ * Разбивает текст на абзацы (по пустой строке), протаскивая открытые теги
+ * в каждый следующий абзац: «[glow]раз\n\nдва[/]» → «[glow]раз[авто]», «[glow]два[/]».
+ * Движок рисует абзацы отдельными блоками — без этого эффект жил бы только в первом.
+ */
+export function splitRichParagraphs(text: string): string[] {
+  const paras = resolveUniversalCloses(text).split(/\n{2,}/);
+  if (paras.length <= 1 || !text.includes('[')) return paras;
+  const out: string[] = [];
+  const stack: string[] = []; // полные токены открытых тегов: «[glow=#fff.hover]»
+  for (const para of paras) {
+    const prefix = stack.join('');
     TAG_RE.lastIndex = 0;
     let m: RegExpExecArray | null;
-    while ((m = TAG_RE.exec(resolved))) {
+    while ((m = TAG_RE.exec(para))) {
       const name = m[2].toLowerCase();
-      if (!TEXTFX_TAGS[name]) continue; // неизвестное — обычный текст
-      if (m[1]) {
-        if (stack.length === 0) return `закрывающий [/${name}] без открывающего`;
-        const top = stack.pop()!;
-        if (top !== name) return `тег [${top}] закрыт как [/${name}]`;
-      } else {
-        if (m[3] && !MODES.includes(m[3].toLowerCase() as FxMode)) {
-          return `у тега [${name}] неизвестный режим «.${m[3]}» (есть .loop / .once / .hover)`;
-        }
-        stack.push(name);
-      }
+      if (!TEXTFX_TAGS[name]) continue;
+      if (m[1]) { if (stack.length) stack.pop(); }
+      else stack.push(m[0]);
     }
-    if (stack.length > 0) return `тег [${stack[stack.length - 1]}] не закрыт (нужен [/${stack[stack.length - 1]}] или [/])`;
+    out.push(prefix + para);
   }
-  return null;
+  return out;
 }
 
 /** Разбирает текст с разметкой и наполняет target готовыми span'ами */
