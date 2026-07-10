@@ -2,7 +2,7 @@
 // Сохранение / загрузка / экспорт игры
 // ============================================================
 
-import { Project } from './types';
+import { Project, PlaytestCheckpoint } from './types';
 
 function download(filename: string, content: string, mime: string) {
   const blob = new Blob([content], { type: mime });
@@ -56,17 +56,28 @@ export function openProjectFile(): Promise<Project> {
   });
 }
 
+/** Настройки старта экспортированной сборки (встраиваются в HTML) */
+export interface ExportBoot {
+  /** Всегда начинать с этой сцены (перекрывает и стартовую проекта, и сейв игрока) */
+  startSceneId?: string;
+  /** Стартовать с чекпоинта плейтеста (демо-сборки с середины игры) */
+  checkpoint?: PlaytestCheckpoint;
+}
+
 /**
  * Экспорт игры: один самодостаточный HTML-файл.
  * Работает на PC и мобильных браузерах без установки.
  */
-export async function exportGame(project: Project) {
+export async function exportGame(project: Project, boot?: ExportBoot) {
   const res = await fetch('runtime.js');
   if (!res.ok) throw new Error('runtime.js не найден — пересоберите проект (npm run runtime)');
   const runtime = await res.text();
 
   // JSON внутри <script>: экранируем закрывающие теги
   const data = JSON.stringify(project).replace(/<\//g, '<\\/');
+  const bootData = boot && (boot.startSceneId || boot.checkpoint)
+    ? JSON.stringify(boot).replace(/<\//g, '<\\/')
+    : null;
 
   const html = `<!DOCTYPE html>
 <html lang="ru">
@@ -77,7 +88,7 @@ export async function exportGame(project: Project) {
 <style>html,body{margin:0;padding:0;background:#000;height:100%;overflow:hidden}</style>
 </head>
 <body>
-<script>window.__TLS_PROJECT__=${data};</script>
+<script>window.__TLS_PROJECT__=${data};${bootData ? `window.__TLS_BOOT__=${bootData};` : ''}</script>
 <script>${runtime}</script>
 </body>
 </html>`;

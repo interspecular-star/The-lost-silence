@@ -109,14 +109,7 @@ export function mountTopbar(root: HTMLElement, store: Store) {
     const playBtn = h('button', { class: 'tb-btn primary', text: '▶ Играть', title: 'Предпросмотр игры (F5)' });
     playBtn.onclick = () => openPreview(store);
     const exportBtn = h('button', { class: 'tb-btn', text: '⤓ Экспорт игры', title: 'Собрать один HTML-файл игры' });
-    exportBtn.onclick = async () => {
-      try {
-        await exportGame(store.project);
-        toast('Игра экспортирована: один HTML-файл, работает на PC и мобильных');
-      } catch (e) {
-        toast(e instanceof Error ? e.message : 'Ошибка экспорта', true);
-      }
-    };
+    exportBtn.onclick = () => openExportDialog(store);
     root.append(playBtn, exportBtn);
   };
 
@@ -124,4 +117,62 @@ export function mountTopbar(root: HTMLElement, store: Store) {
   store.on('mode', render);
   store.on('project', render);
   render();
+}
+
+/** Диалог экспорта: явный выбор, с чего начнётся собранная игра */
+function openExportDialog(store: Store) {
+  const p = store.project;
+  const startScene = p.scenes.find((s) => s.id === p.startSceneId);
+
+  const backdrop = h('div', {
+    style: 'position:fixed;inset:0;z-index:10000;background:rgba(2,4,6,0.6);display:flex;align-items:center;justify-content:center;',
+  });
+  const panel = h('div', {
+    style: 'background:var(--panel,#161b22);border:1px solid var(--border,#2a3038);border-radius:10px;'
+      + 'padding:18px;width:440px;display:flex;flex-direction:column;gap:10px;',
+  });
+  panel.appendChild(h('div', { style: 'font-weight:600;font-size:15px;', text: 'Экспорт игры' }));
+
+  // один селект: стартовая проекта / любая сцена / чекпоинт
+  const options: [string, string][] = [
+    ['project', `Стартовая сцена проекта: «${startScene?.name ?? '—'}»`],
+    ...p.scenes.filter((s) => s.id !== p.startSceneId)
+      .map((s) => [`scene:${s.id}`, `Со сцены: ${s.name}`] as [string, string]),
+    ...(p.playtests ?? []).map((cp) => [`cp:${cp.id}`, `С чекпоинта: ${cp.name}`] as [string, string]),
+  ];
+  const sel = h('select', { class: 'ed' }) as HTMLSelectElement;
+  for (const [v, label] of options) {
+    const o = h('option', { value: v, text: label });
+    sel.appendChild(o);
+  }
+  panel.appendChild(h('div', { style: 'font-size:12px;color:var(--text-dim,#9aa7b4);', text: 'Игра начнётся с:' }));
+  panel.appendChild(sel);
+  panel.appendChild(h('div', {
+    class: 'hint',
+    text: 'Первый вариант — обычная сборка: игрок стартует со стартовой сцены, сейв продолжает игру с места остановки. '
+      + 'Выбор конкретной сцены/чекпоинта перекрывает и стартовую, и сейв — каждый запуск начинается там (для демо и тестов).',
+  }));
+
+  const btnRow = h('div', { style: 'display:flex;gap:8px;justify-content:flex-end;margin-top:4px;' });
+  const cancel = h('button', { class: 'btn', text: 'Отмена' });
+  cancel.onclick = () => backdrop.remove();
+  const go = h('button', { class: 'btn accent', text: '⤓ Экспортировать' });
+  go.onclick = async () => {
+    try {
+      const v = sel.value;
+      const boot = v === 'project' ? undefined
+        : v.startsWith('scene:') ? { startSceneId: v.slice(6) }
+        : { checkpoint: (p.playtests ?? []).find((cp) => cp.id === v.slice(3)) };
+      await exportGame(p, boot);
+      backdrop.remove();
+      toast('Игра экспортирована: один HTML-файл, работает на PC и мобильных');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Ошибка экспорта', true);
+    }
+  };
+  btnRow.append(cancel, go);
+  panel.appendChild(btnRow);
+  backdrop.appendChild(panel);
+  backdrop.onclick = (e) => { if (e.target === backdrop) backdrop.remove(); };
+  document.body.appendChild(backdrop);
 }

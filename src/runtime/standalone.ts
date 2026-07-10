@@ -4,10 +4,14 @@
 // ============================================================
 
 import { Engine, fitStage } from './engine';
-import { Project } from '../core/types';
+import { Project, PlaytestCheckpoint } from '../core/types';
 
 declare global {
-  interface Window { __TLS_PROJECT__?: Project; }
+  interface Window {
+    __TLS_PROJECT__?: Project;
+    /** Настройки старта сборки (см. storage.exportGame): сцена и/или чекпоинт */
+    __TLS_BOOT__?: { startSceneId?: string; checkpoint?: PlaytestCheckpoint };
+  }
 }
 
 function boot() {
@@ -24,7 +28,14 @@ function boot() {
   document.body.appendChild(stage);
   fitStage(stage, document.body);
 
-  const engine = new Engine(project, stage, { persist: true });
+  const boot = window.__TLS_BOOT__;
+  const engine = new Engine(project, stage, {
+    persist: true,
+    // выбранная при экспорте сцена перекрывает и стартовую проекта, и сейв игрока;
+    // чекпоинт — снимок переменных/инвентаря для демо-сборок с середины игры
+    startSceneId: boot?.startSceneId,
+    checkpoint: boot?.checkpoint,
+  });
   engine.start();
 }
 
