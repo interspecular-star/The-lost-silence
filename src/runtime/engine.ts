@@ -708,25 +708,39 @@ export class Engine {
       }
     };
     if (!this.currentScene || this.currentScene.id === scene.id) { apply(); return; }
-    this.transitionScene(apply);
+    this.transitionScene(apply, scene.bgImage);
   }
 
   /** Мягкий кросс-фейд между сценами: гасим фон+слои сцены, меняем содержимое, проявляем обратно.
    *  Длительность настраивается у сцены, С КОТОРОЙ уходим (Scene.fadeSec) — для медленных
-   *  кинематографичных переходов между главами. */
-  private transitionScene(swap: () => void) {
+   *  кинематографичных переходов между главами.
+   *  Картинка следующей сцены декодируется ЗАРАНЕЕ (параллельно с затемнением):
+   *  CSS background-image декодируется лениво, и без предзагрузки первый кадр
+   *  новой сцены мигал голым цветом фона — та самая «микро-вспышка». */
+  private transitionScene(swap: () => void, nextBgImage?: string) {
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     const ms = reduced ? 0 : Math.round((this.currentScene?.fadeSec ?? 0.22) * 1000);
     clearTimeout(this.sceneTransitionTimer);
+    let ready: Promise<unknown> = Promise.resolve();
+    if (nextBgImage) {
+      const img = new Image();
+      img.src = nextBgImage;
+      const decoded = typeof img.decode === 'function' ? img.decode().catch(() => undefined) : Promise.resolve();
+      // страховка: если декодирование зависло, не держим игрока дольше 600 мс
+      ready = Promise.race([decoded, new Promise((r) => setTimeout(r, 600))]);
+    }
     this.bgLayer.style.transition = `opacity ${ms}ms ease`;
     this.sceneLayer.style.transition = `opacity ${ms}ms ease`;
     this.bgLayer.style.opacity = '0';
     this.sceneLayer.style.opacity = '0';
     this.sceneTransitionTimer = window.setTimeout(() => {
-      swap();
-      requestAnimationFrame(() => {
-        this.bgLayer.style.opacity = '1';
-        this.sceneLayer.style.opacity = '1';
+      ready.then(() => {
+        if (this.destroyed) return;
+        swap();
+        requestAnimationFrame(() => {
+          this.bgLayer.style.opacity = '1';
+          this.sceneLayer.style.opacity = '1';
+        });
       });
     }, ms);
   }
