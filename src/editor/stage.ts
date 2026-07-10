@@ -9,7 +9,7 @@ import {
   CANVAS_W, CANVAS_H, ELEMENT_TYPE_LABELS,
 } from '../core/types';
 import { h } from './ui';
-import { renderRichInto } from '../runtime/textfx';
+import { renderRichInto, splitRichParagraphs } from '../runtime/textfx';
 import { applyBoxFx, glassBg } from '../runtime/boxfx';
 import { applyTextGuard } from '../runtime/elementfx';
 
@@ -346,11 +346,21 @@ export class StageView {
     d.style.overflow = 'hidden';
 
     switch (el.type) {
-      case 'text':
+      case 'text': {
         applyTextGuard(d, s.guard, s.guardPower); // читаемость — видна и на холсте
-        // разметка [b]/[c=…]/… видна статично (анимации — только в F5/игре)
-        renderRichInto(d, el.text ?? '', { animate: false });
+        // абзацы рисуем КАК ДВИЖОК: пустая строка = компактный отступ 0.55em,
+        // а не целая пустая строка — иначе высота блока на холсте и в игре расходилась
+        d.textContent = '';
+        splitRichParagraphs(el.text ?? '').forEach((para, i) => {
+          const p = document.createElement('div');
+          p.style.whiteSpace = 'pre-wrap';
+          if (i > 0) p.style.marginTop = '0.55em';
+          // разметка [b]/[c=…]/… видна статично (анимации — только в F5/игре)
+          renderRichInto(p, para, { animate: false });
+          d.appendChild(p);
+        });
         break;
+      }
       case 'button':
         applyTextGuard(d, s.guard, s.guardPower);
         d.style.display = 'flex';
