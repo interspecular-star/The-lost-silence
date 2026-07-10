@@ -136,7 +136,11 @@ export class Engine {
     ensureUiFxStyles();
     ensureTextFxStyles();
     this.bgLayer = document.createElement('div');
-    this.bgLayer.style.cssText = 'position:absolute;inset:0;';
+    // isolation+will-change: слой фона ВСЕГДА имеет свой контекст наложения и
+    // композитный слой. Без этого в момент окончания opacity-перехода Chromium
+    // пересобирал композитинг, и оверлеи эффектов с mix-blend-mode (виньетка,
+    // скан-линии, зерно) на один кадр рисовались без смешивания — микро-вспышка.
+    this.bgLayer.style.cssText = 'position:absolute;inset:0;isolation:isolate;will-change:opacity;';
     this.buildBgChain();
 
     this.sceneLayer = document.createElement('div');
