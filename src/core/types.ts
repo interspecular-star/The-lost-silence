@@ -89,8 +89,20 @@ export interface SceneElement {
   src?: string;            // для image (url или data-uri)
   style: ElementStyle;
   boxStyle?: BoxStyle;     // материал кнопки (spatial/рамка); скругление берётся из style.radius
+  fx?: ElementFx;          // появление/исчезновение (титры глав, флэшбэки)
   action?: ElementAction;
   visibleIf?: Condition[]; // условия видимости в игре
+}
+
+// ---------- Анимация появления/исчезновения элемента (титры, флэшбэки) ----------
+export type ElementFxKind = 'fade' | 'blur' | 'rise' | 'zoom';
+export interface ElementFx {
+  in?: ElementFxKind;    // появление при показе сцены
+  inDelay?: number;      // сек — задержка появления
+  inDur?: number;        // сек — длительность (по умолчанию 0.9)
+  outAt?: number;        // сек от показа сцены — начать исчезновение
+  out?: ElementFxKind;   // тип исчезновения (по умолчанию fade)
+  outDur?: number;       // сек (по умолчанию 0.9)
 }
 
 // ---------- Сцены ----------
@@ -115,6 +127,8 @@ export interface Scene {
   hudMode?: 'auto' | 'on' | 'off'; // 'auto' — HUD скрыт на страницах, показан на локациях/уровнях
   dialogueBoxStyle?: BoxStyle; // переопределение материала диалога на этой сцене (> фракции > темы)
   choiceStyle?: BoxStyle;      // переопределение материала вариантов на этой сцене (> темы)
+  autoNext?: { sceneId: string; delaySec: number }; // автопереход (флэшбэки, титры глав)
+  fadeSec?: number;            // длительность кросс-фейда при уходе С этой сцены (по умолчанию 0.22)
 }
 
 // ---------- Настройка фонового изображения ----------

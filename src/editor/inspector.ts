@@ -7,7 +7,7 @@ import {
   SceneElement, DialogueNode, Condition, Effect, VarValue, VarType,
   ELEMENT_TYPE_LABELS, NODE_TYPE_LABELS, SCENE_KIND_LABELS, uid,
   BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
-  BoxSurface, BoxBorderFx, BoxStyle, BoxTempo, BoxIntensity,
+  BoxSurface, BoxBorderFx, BoxStyle, BoxTempo, BoxIntensity, ElementFxKind,
 } from '../core/types';
 import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS, BOX_TEMPO_LABELS, BOX_INTENSITY_LABELS } from '../runtime/boxfx';
 import { materialPreview } from './matpreview';
@@ -200,6 +200,24 @@ export function mountInspector(root: HTMLElement, store: Store) {
       row('Диалог', selectInput(scene.onEnterDialogueId ?? '', dlgOptions,
         (v) => mutate(() => { scene.onEnterDialogueId = v || undefined; }))),
       h('div', { class: 'hint', text: 'Диалог запустится автоматически, когда игрок попадёт в эту сцену.' }),
+    ));
+
+    // автопереход + длительность фейда (флэшбэки, титры глав)
+    const sceneOptions: [string, string][] = [['', '— нет (сцена ждёт игрока) —'],
+      ...store.project.scenes.filter((s) => s.id !== scene.id).map((s) => [s.id, s.name] as [string, string])];
+    root.appendChild(section('Переход дальше',
+      row('Автопереход в', selectInput(scene.autoNext?.sceneId ?? '', sceneOptions, (v) => mutate(() => {
+        scene.autoNext = v ? { sceneId: v, delaySec: scene.autoNext?.delaySec ?? 4 } : undefined;
+      }))),
+      ...(scene.autoNext ? [
+        row('Через, с', numberInput(scene.autoNext.delaySec, (v) => mutate(() => {
+          scene.autoNext = { ...scene.autoNext!, delaySec: Math.max(0.3, v) };
+        }))),
+      ] : []),
+      row('Фейд ухода, с', numberInput(scene.fadeSec ?? 0.22, (v) => mutate(() => {
+        scene.fadeSec = v === 0.22 ? undefined : Math.max(0, Math.min(5, v));
+      }))),
+      h('div', { class: 'hint', text: 'Автопереход — для флэшбэков и титров глав: сцена сама уходит дальше (диалог и бой не прерываются — подождёт). «Фейд ухода» — скорость затемнения при уходе С этой сцены: 1.5–2 для кинематографичных смен глав.' }),
     ));
 
     // направляющие
@@ -547,6 +565,35 @@ export function mountInspector(root: HTMLElement, store: Store) {
       })));
     }
     root.appendChild(actionSection);
+
+    // появление/исчезновение (титры глав, флэшбэки)
+    if (el.type !== 'hotspot') {
+      const fx = el.fx ?? {};
+      const setFx = (patch: Partial<NonNullable<typeof el.fx>>) => mutate(() => {
+        el.fx = { ...(el.fx ?? {}), ...patch };
+        // пустой объект = нет анимации
+        if (!el.fx.in && el.fx.outAt === undefined) el.fx = undefined;
+      });
+      const fxOptions: [string, string][] = [
+        ['', '— нет —'], ['fade', 'Проявление'], ['blur', 'Из размытия'],
+        ['rise', 'Подъём'], ['zoom', 'Наплыв (зум)'],
+      ];
+      root.appendChild(section('Появление / исчезновение',
+        row('Появление', selectInput(fx.in ?? '', fxOptions,
+          (v) => setFx({ in: (v || undefined) as ElementFxKind | undefined }))),
+        ...(fx.in ? [
+          row('Задержка, с', numberInput(fx.inDelay ?? 0, (v) => setFx({ inDelay: v || undefined }))),
+          row('Длительность, с', numberInput(fx.inDur ?? 0.9, (v) => setFx({ inDur: v === 0.9 ? undefined : v }))),
+        ] : []),
+        row('Исчезнуть через, с', numberInput(fx.outAt ?? 0, (v) => setFx({ outAt: v > 0 ? v : undefined }))),
+        ...(fx.outAt !== undefined ? [
+          row('Как исчезает', selectInput(fx.out ?? 'fade', fxOptions.slice(1),
+            (v) => setFx({ out: v as ElementFxKind }))),
+          row('Длительность, с', numberInput(fx.outDur ?? 0.9, (v) => setFx({ outDur: v === 0.9 ? undefined : v }))),
+        ] : []),
+        h('div', { class: 'hint', text: 'Для титров глав: появление «Из размытия» с задержкой, исчезновение через N секунд, а у сцены — автопереход (панель «Мир»). 0 в «Исчезнуть через» = не исчезает. Видно в предпросмотре (F5), на холсте — статично.' }),
+      ));
+    }
 
     // условная видимость
     const visSection = section('Показывать при условии');

@@ -144,6 +144,11 @@ export function validateProject(p: Project): Issue[] {
     const goScene = (s: Store) => { s.setMode('scene'); s.selectScene(sc.id); };
     const whereScene = `Сцена «${sc.name}»`;
 
+    if (sc.autoNext) {
+      if (!sceneById.has(sc.autoNext.sceneId)) err(whereScene, 'автопереход на удалённую сцену', goScene);
+      else referencedScenes.add(sc.autoNext.sceneId);
+    }
+
     if (sc.onEnterDialogueId) {
       if (!dlgById.has(sc.onEnterDialogueId)) err(whereScene, 'диалог при входе удалён', goScene);
       else referencedDialogues.add(sc.onEnterDialogueId);

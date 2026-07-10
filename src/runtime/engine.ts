@@ -16,6 +16,7 @@ import { ensureUiFxStyles } from './uifx';
 import { ensureTextFxStyles, renderRichInto } from './textfx';
 import { applyBoxFx, glassBg } from './boxfx';
 import { WhisperSystem, WhisperLogEntry } from './whisper';
+import { applyElementFx } from './elementfx';
 import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -112,6 +113,8 @@ export class Engine {
   private tickTimer: number | undefined;
   private saveTimer: number | undefined;
   private sceneTransitionTimer: number | undefined;
+  private autoNextTimer: number | undefined;   // автопереход сцены (флэшбэки, титры)
+  private elementFxTimers: number[] = [];      // таймеры исчезновения элементов
   private destroyed = false;
 
   constructor(project: Project, root: HTMLElement, opts: EngineOptions = {}) {
@@ -269,6 +272,8 @@ export class Engine {
     clearInterval(this.tickTimer);
     clearTimeout(this.saveTimer);
     clearTimeout(this.sceneTransitionTimer);
+    clearTimeout(this.autoNextTimer);
+    for (const t of this.elementFxTimers) clearTimeout(t);
     this.whispers?.destroy();
     this.root.removeEventListener('pointermove', this.onBgPointerMove);
   }
@@ -687,15 +692,30 @@ export class Engine {
       this.scheduleSave();
       if (scene.onEnterDialogueId && !suppressEnter) this.startDialogue(scene.onEnterDialogueId);
       this.whispers.onSceneEnter(scene.id);
+      // автопереход: флэшбэк/титул главы сам уходит дальше; диалог и бой не рвём
+      clearTimeout(this.autoNextTimer);
+      const an = scene.autoNext;
+      if (an?.sceneId && an.sceneId !== scene.id) {
+        const arm = (ms: number) => {
+          this.autoNextTimer = window.setTimeout(() => {
+            if (this.destroyed) return;
+            if (this.dialogueActive || this.inCombat) { arm(1000); return; }
+            this.gotoScene(an.sceneId);
+          }, ms);
+        };
+        arm(Math.max(0.3, an.delaySec || 0) * 1000);
+      }
     };
     if (!this.currentScene || this.currentScene.id === scene.id) { apply(); return; }
     this.transitionScene(apply);
   }
 
-  /** Мягкий кросс-фейд между сценами: гасим фон+слои сцены, меняем содержимое, проявляем обратно */
+  /** Мягкий кросс-фейд между сценами: гасим фон+слои сцены, меняем содержимое, проявляем обратно.
+   *  Длительность настраивается у сцены, С КОТОРОЙ уходим (Scene.fadeSec) — для медленных
+   *  кинематографичных переходов между главами. */
   private transitionScene(swap: () => void) {
     const reduced = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const ms = reduced ? 0 : 220;
+    const ms = reduced ? 0 : Math.round((this.currentScene?.fadeSec ?? 0.22) * 1000);
     clearTimeout(this.sceneTransitionTimer);
     this.bgLayer.style.transition = `opacity ${ms}ms ease`;
     this.sceneLayer.style.transition = `opacity ${ms}ms ease`;
@@ -729,8 +749,14 @@ export class Engine {
       .join('|');
     if (sig !== this.sceneSig) {
       this.sceneSig = sig;
+      for (const t of this.elementFxTimers) clearTimeout(t);
+      this.elementFxTimers = [];
       this.sceneLayer.innerHTML = '';
-      for (const el of visible) this.sceneLayer.appendChild(this.renderElement(el));
+      for (const el of visible) {
+        const d = this.renderElement(el);
+        if (el.fx) applyElementFx(d, el.fx, this.elementFxTimers); // титры/флэшбэки
+        this.sceneLayer.appendChild(d);
+      }
     }
     this.renderHUD();
   }
