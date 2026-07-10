@@ -16,7 +16,7 @@ import { ensureUiFxStyles } from './uifx';
 import { ensureTextFxStyles, renderRichInto, splitRichParagraphs } from './textfx';
 import { applyBoxFx, glassBg } from './boxfx';
 import { WhisperSystem, WhisperLogEntry } from './whisper';
-import { applyElementFx } from './elementfx';
+import { applyElementFx, applyTextGuard } from './elementfx';
 import { materializeFactionReps, computeFactionRep, npcPortrait, npcFullPortrait, placeholderFullPortrait } from '../core/npc';
 import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
@@ -952,6 +952,7 @@ export class Engine {
     switch (el.type) {
       case 'text':
         common();
+        applyTextGuard(d, s.guard, s.guardPower); // читаемость на пёстром фоне
         this.setParagraphs(d, this.interpolate(el.text ?? ''));
         break;
       case 'rect':
@@ -959,6 +960,7 @@ export class Engine {
         break;
       case 'button': {
         common();
+        applyTextGuard(d, s.guard, s.guardPower);
         d.style.display = 'flex';
         d.style.alignItems = 'center';
         d.style.justifyContent = s.textAlign === 'left' ? 'flex-start' : s.textAlign === 'right' ? 'flex-end' : 'center';

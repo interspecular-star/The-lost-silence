@@ -11,6 +11,7 @@ import {
 import { h } from './ui';
 import { renderRichInto } from '../runtime/textfx';
 import { applyBoxFx, glassBg } from '../runtime/boxfx';
+import { applyTextGuard } from '../runtime/elementfx';
 
 const RULER = 24;
 const SNAP_SCREEN_PX = 7;
@@ -346,10 +347,12 @@ export class StageView {
 
     switch (el.type) {
       case 'text':
+        applyTextGuard(d, s.guard, s.guardPower); // читаемость — видна и на холсте
         // разметка [b]/[c=…]/… видна статично (анимации — только в F5/игре)
         renderRichInto(d, el.text ?? '', { animate: false });
         break;
       case 'button':
+        applyTextGuard(d, s.guard, s.guardPower);
         d.style.display = 'flex';
         d.style.alignItems = 'center';
         d.style.justifyContent = s.textAlign === 'left' ? 'flex-start' : s.textAlign === 'right' ? 'flex-end' : 'center';

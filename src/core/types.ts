@@ -56,9 +56,14 @@ export interface ElementAction {
 // ---------- Элементы сцены ----------
 export type ElementType = 'text' | 'rect' | 'image' | 'button' | 'hotspot';
 
+/** Читаемость текста на пёстром/светлом фоне (см. runtime/elementfx.ts) */
+export type TextGuard = 'shadow' | 'outline' | 'scrim';
+
 export interface ElementStyle {
   fill?: string;
   textColor?: string;
+  guard?: TextGuard;       // тень / контур / подложка — выделение текста на фоне
+  guardPower?: number;     // сила 1–3 (по умолчанию 2)
   fontSize?: number;
   fontFamily?: string;
   fontWeight?: string;

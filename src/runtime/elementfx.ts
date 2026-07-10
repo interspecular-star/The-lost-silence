@@ -4,7 +4,40 @@
 // на холсте редактора элементы статичны.
 // ============================================================
 
-import { ElementFx } from '../core/types';
+import { ElementFx, TextGuard } from '../core/types';
+
+export const TEXT_GUARD_LABELS: Record<string, string> = {
+  '': '— нет —',
+  shadow: 'Тень — мягкая, как в субтитрах',
+  outline: 'Контур — тонкая тёмная кайма букв',
+  scrim: 'Подложка — затемняющая полоса за текстом',
+};
+
+/**
+ * Читаемость текста на пёстром/светлом фоне. Статичный стиль (не эффект):
+ * одинаково рисуется на холсте редактора и в игре. Размеры в em —
+ * масштабируются вместе со шрифтом.
+ */
+export function applyTextGuard(d: HTMLElement, kind: TextGuard | undefined, power?: number) {
+  if (!kind) return;
+  const p = Math.max(1, Math.min(3, power ?? 2)) - 1;
+  if (kind === 'shadow') {
+    const a = [0.45, 0.68, 0.9][p];
+    d.style.textShadow = `0 0.05em 0.14em rgba(0,0,0,${a}), 0 0 0.6em rgba(0,0,0,${(a * 0.6).toFixed(2)})`;
+  } else if (kind === 'outline') {
+    const a = [0.5, 0.75, 1][p];
+    const r = 0.035;
+    const dirs = [[1, 0], [-1, 0], [0, 1], [0, -1], [0.7, 0.7], [-0.7, 0.7], [0.7, -0.7], [-0.7, -0.7]];
+    d.style.textShadow = dirs
+      .map(([x, y]) => `${(x * r).toFixed(3)}em ${(y * r).toFixed(3)}em 0 rgba(0,0,0,${a})`)
+      .join(', ');
+  } else { // scrim
+    const a = [0.28, 0.44, 0.6][p];
+    d.style.background = `rgba(3,6,10,${a})`;
+    d.style.backdropFilter = 'blur(5px)';
+    if (!d.style.borderRadius || d.style.borderRadius === '0px') d.style.borderRadius = '10px';
+  }
+}
 
 /**
  * Навешивает анимации на элемент. Таймер исчезновения кладётся в timers —

@@ -7,8 +7,9 @@ import {
   SceneElement, DialogueNode, Condition, Effect, VarValue, VarType,
   ELEMENT_TYPE_LABELS, NODE_TYPE_LABELS, SCENE_KIND_LABELS, uid,
   BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
-  BoxSurface, BoxBorderFx, BoxStyle, BoxTempo, BoxIntensity, ElementFxKind,
+  BoxSurface, BoxBorderFx, BoxStyle, BoxTempo, BoxIntensity, ElementFxKind, TextGuard,
 } from '../core/types';
+import { TEXT_GUARD_LABELS } from '../runtime/elementfx';
 import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS, BOX_TEMPO_LABELS, BOX_INTENSITY_LABELS } from '../runtime/boxfx';
 import { materialPreview } from './matpreview';
 import { duplicateElement } from '../core/store';
@@ -474,6 +475,16 @@ export function mountInspector(root: HTMLElement, store: Store) {
       }
       if (el.type === 'text' || el.type === 'button') {
         styleSection.appendChild(row('Цвет текста', colorRow(s.textColor ?? '#e6edf3', (v) => mutate(() => { s.textColor = v; }))));
+        styleSection.appendChild(row('Читаемость', selectInput(s.guard ?? '',
+          Object.entries(TEXT_GUARD_LABELS) as [string, string][],
+          (v) => mutate(() => {
+            s.guard = (v || undefined) as TextGuard | undefined;
+            if (!s.guard) s.guardPower = undefined;
+          }))));
+        if (s.guard) {
+          styleSection.appendChild(row('Сила', rangeInput(s.guardPower ?? 2, 1, 3, 1,
+            (v) => mutate(() => { s.guardPower = v === 2 ? undefined : v; }))));
+        }
         const g = h('div', { class: 'insp-grid2' });
         g.append(
           field('Кегль', numberInput(s.fontSize ?? 24, (v) => mutate(() => { s.fontSize = v; }))),
