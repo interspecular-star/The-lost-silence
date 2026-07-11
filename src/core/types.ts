@@ -33,7 +33,8 @@ export interface Condition {
   value: VarValue;
 }
 
-export type EffectOp = 'set' | 'add' | 'sub' | 'toggle';
+// random — случайное целое 1..N (N в value): точки обыска, вариативный лут (C7)
+export type EffectOp = 'set' | 'add' | 'sub' | 'toggle' | 'random';
 export interface Effect {
   varId: string;
   op: EffectOp;
@@ -652,5 +653,5 @@ export const COND_OP_LABELS: Record<CondOp, string> = {
 };
 
 export const EFFECT_OP_LABELS: Record<EffectOp, string> = {
-  set: 'установить', add: '+', sub: '−', toggle: 'переключить',
+  set: 'установить', add: '+', sub: '−', toggle: 'переключить', random: 'случайно 1..N',
 };

@@ -1094,7 +1094,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
   function opsForType(type: VarType | undefined): [string, string][] {
     if (type === 'boolean') return [['set', '='], ['toggle', '⇄']];
     if (type === 'string') return [['set', '=']];
-    return [['set', '='], ['add', '+'], ['sub', '−']];
+    return [['set', '='], ['add', '+'], ['sub', '−'], ['random', '🎲 1..N']];
   }
 
   function effectsEditor(list: Effect[], commit: (list: Effect[]) => void): HTMLElement {

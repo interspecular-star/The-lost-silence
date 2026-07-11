@@ -642,6 +642,8 @@ export class Engine {
         case 'add': this.state[e.varId] = Number(cur ?? 0) + Number(e.value); break;
         case 'sub': this.state[e.varId] = Number(cur ?? 0) - Number(e.value); break;
         case 'toggle': this.state[e.varId] = !cur; break;
+        // случайное целое 1..N — точки обыска со случайным лутом (branch по значению)
+        case 'random': this.state[e.varId] = Math.floor(Math.random() * Math.max(1, Number(e.value))) + 1; break;
       }
       // отношения NPC зажаты в 0..100
       if (isRelation(e.varId)) {
