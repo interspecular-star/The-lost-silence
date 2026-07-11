@@ -167,7 +167,8 @@ export function validateProject(p: Project): Issue[] {
         if (node.sceneId) {
           if (!sceneById.has(node.sceneId)) err(whereNode, '«Войти» ведёт в удалённую сцену', goScene);
           else referencedScenes.add(node.sceneId);
-        } else {
+        } else if (!node.lockedIf?.length) {
+          // запертый узел без сцены — нормально (ворота «на потом»); открытый — вероятно, забыли
           warn(whereNode, 'узел без сцены — «Войти» не появится (декорация)', goScene);
         }
         checkConds(node.lockedIf, `${whereNode} (условия «заперто»)`, goScene);
