@@ -188,6 +188,18 @@ export function validateProject(p: Project): Issue[] {
       }
     }
 
+    // зона аномалии: аварийные выходы
+    if (sc.zone) {
+      if (!(sc.zone.hpExits ?? []).length && sc.zone.dmgPerSec > 0) {
+        warn(whereScene, 'зона без аварийных выходов — HP осядет на 1, игрок останется в зоне', goScene);
+      }
+      for (const exit of sc.zone.hpExits ?? []) {
+        if (!exit.sceneId || !sceneById.has(exit.sceneId)) err(whereScene, 'аварийный выход зоны ведёт в удалённую сцену', goScene);
+        else referencedScenes.add(exit.sceneId);
+        checkConds(exit.conditions, `${whereScene} (условия выхода зоны)`, goScene);
+      }
+    }
+
     for (const el of sc.elements) {
       const goEl = (s: Store) => { s.setMode('scene'); s.selectScene(sc.id); s.selectElements([el.id]); };
       const whereEl = `${whereScene} → «${el.name}»`;

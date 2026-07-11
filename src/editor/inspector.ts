@@ -122,6 +122,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     ));
 
     root.appendChild(campMapSection(scene));
+    root.appendChild(zoneSection(scene));
 
     const bgUpload = h('button', { class: 'btn small block', text: '📁 Загрузить картинку фона…' });
     bgUpload.onclick = async () => {
@@ -487,6 +488,45 @@ export function mountInspector(root: HTMLElement, store: Store) {
       sec.appendChild(addLink);
     }
     sec.appendChild(h('div', { class: 'hint', text: 'В игре: клик по ромбу — сайдбар с приметой и «кто здесь», кнопка ВОЙТИ (или повторный клик по ромбу) — переход в сцену. Пометки и замки живут по условиям. Холст показывает план статично; поведение — в предпросмотре (F5).' }));
+    return sec;
+  }
+
+  // ================= ЗОНА АНОМАЛИИ (C7) =================
+  function zoneSection(scene: Scene): HTMLElement {
+    const sec = section('Зона аномалии (таймер)');
+    sec.appendChild(checkbox(!!scene.zone, (v) => mutate(() => {
+      scene.zone = v ? (scene.zone ?? { exposureSec: 300, dmgPerSec: 2, recoverySec: 60, hpExitPct: 50, hpExits: [] }) : undefined;
+    }), 'на этой сцене идёт экспозиция'));
+    const z = scene.zone;
+    if (!z) {
+      sec.appendChild(h('div', { class: 'hint', text: 'Таймер безопасного пребывания: на экране — «счёт про себя» (у ГГ нет интерфейса), после истечения капает урон, реген HP в зоне выключен. Вышел — откат; вернулся раньше — бюджет продолжается с остатка.' }));
+      return sec;
+    }
+    sec.appendChild(row('Экспозиция, с', numberInput(z.exposureSec, (v) => mutate(() => { z.exposureSec = Math.max(5, v); }))));
+    sec.appendChild(row('Урон HP/с', numberInput(z.dmgPerSec, (v) => mutate(() => { z.dmgPerSec = Math.max(0, v); }))));
+    sec.appendChild(row('Откат, с', numberInput(z.recoverySec, (v) => mutate(() => { z.recoverySec = Math.max(1, v); }))));
+    sec.appendChild(row('Выброс при HP ≤ %', numberInput(z.hpExitPct ?? 50, (v) => mutate(() => { z.hpExitPct = Math.max(1, Math.min(99, v)); }))));
+
+    sec.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Аварийные выходы (первый, чьи условия верны):' }));
+    const sceneOptions: [string, string][] = [['', '— сцена —'],
+      ...store.project.scenes.filter((s) => s.id !== scene.id).map((s) => [s.id, s.name] as [string, string])];
+    (z.hpExits ?? []).forEach((exit, i) => {
+      const card = h('div', { class: 'cond-card' });
+      const r = h('div', { class: 'row' });
+      r.appendChild(selectInput(exit.sceneId, sceneOptions, (v) => mutate(() => { exit.sceneId = v; })));
+      const del = h('button', { class: 'del', text: '✕' });
+      del.onclick = () => mutate(() => { z.hpExits = (z.hpExits ?? []).filter((_, j) => j !== i); });
+      r.appendChild(del);
+      card.appendChild(r);
+      card.appendChild(conditionsEditor(exit.conditions, (list) => mutate(() => { exit.conditions = list; })));
+      sec.appendChild(card);
+    });
+    const addExit = h('button', { class: 'btn small', text: '+ выход' });
+    addExit.onclick = () => mutate(() => {
+      z.hpExits = [...(z.hpExits ?? []), { conditions: [], sceneId: store.project.scenes.find((s) => s.id !== scene.id)?.id ?? '' }];
+    });
+    sec.appendChild(addExit);
+    sec.appendChild(h('div', { class: 'hint', text: 'Без выходов HP осядет на 1 и игрок останется в зоне. Обычно: выход «спасли» по флагу + выход по умолчанию (без условий) последним.' }));
     return sec;
   }
 

@@ -136,6 +136,7 @@ export interface Scene {
   autoNext?: { sceneId: string; delaySec: number }; // автопереход (флэшбэки, титры глав)
   fadeSec?: number;            // длительность кросс-фейда при уходе С этой сцены (по умолчанию 0.22)
   campMap?: CampMapConfig;     // сцена-карта: план лагеря с ромбами-локациями (блок I)
+  zone?: ZoneConfig;           // зона аномалии: таймер экспозиции + урон + аварийные выходы (C7)
 }
 
 // ---------- Карта лагеря (блок I — spatial-навигация аванпоста) ----------
@@ -170,6 +171,18 @@ export interface CampMapConfig {
   nodes: CampMapNode[];
   links: CampMapLink[];
   homeNodeId?: string;       // «текущее положение» до первого входа куда-либо
+}
+
+// ---------- Зона аномалии: таймер экспозиции (C7, world-anomalies.md §4) ----------
+/** Аварийный выход: первый, чьи условия истинны */
+export interface ZoneExit { conditions: Condition[]; sceneId: string; }
+
+export interface ZoneConfig {
+  exposureSec: number;   // безопасное время в зоне; на экране — «счёт про себя» вверх
+  dmgPerSec: number;     // урон HP в секунду после истечения бюджета (HP не падает ниже 1)
+  recoverySec: number;   // откат вне зоны: вернулся раньше — бюджет продолжается с остатка
+  hpExitPct?: number;    // HP ≤ N% максимума → жёсткий переход (по умолчанию 50)
+  hpExits?: ZoneExit[];  // куда выбрасывает (напр. «спас Тэмур» по флагу)
 }
 
 // ---------- Настройка фонового изображения ----------

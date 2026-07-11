@@ -55,6 +55,7 @@ interface SaveData {
   wshown?: string[];                        // шёпоты: уже прозвучавшие (не-repeatable)
   wlog?: WhisperLogEntry[];                 // журнал шёпота (последние 50)
   maploc?: Record<string, string>;          // карты лагеря: id сцены-карты → id текущего узла
+  zone?: { sceneId: string; budgetLeft: number; recoveryLeft: number; recoverySec: number } | null; // зона аномалии
   buildId?: string;                         // штамп сборки, записавшей сейв
 }
 
@@ -115,6 +116,9 @@ export class Engine {
   // карта лагеря (блок I): «текущее положение» по сценам-картам + выбранный узел сайдбара
   mapLoc: Record<string, string> = {};
   mapSelection: string | null = null;
+  // зона аномалии (C7): бюджет экспозиции текущей/последней зоны + откат вне зоны
+  private zoneState: { sceneId: string; budgetLeft: number; recoveryLeft: number; recoverySec: number } | null = null;
+  private zoneLayer!: HTMLElement;
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
   /** NPC последней показанной реплики — определяет фракционный скин диалогового блока */
@@ -158,8 +162,12 @@ export class Engine {
     this.invLayer = document.createElement('div');
     this.invLayer.style.cssText = `position:absolute;inset:0;pointer-events:none;
       font-size:calc(26 * 100cqw / ${CANVAS_W});`;
+    this.zoneLayer = document.createElement('div');
+    this.zoneLayer.style.cssText = `position:absolute;inset:0;pointer-events:none;
+      font-size:calc(26 * 100cqw / ${CANVAS_W});`;
     root.appendChild(this.bgLayer);
     root.appendChild(this.sceneLayer);
+    root.appendChild(this.zoneLayer);
     root.appendChild(this.hudLayer);
     root.appendChild(this.dialogueLayer);
     root.appendChild(this.invLayer);
@@ -222,6 +230,7 @@ export class Engine {
         this.whispers.shown = new Set(save.wshown ?? []);
         this.whispers.log = save.wlog ?? [];
         this.mapLoc = save.maploc ?? {};
+        this.zoneState = save.zone ?? null;
         if (save.sceneId && this.project.scenes.some((s) => s.id === save.sceneId)) {
           startId = save.sceneId;
         }
@@ -468,16 +477,91 @@ export class Engine {
       this.applyIdle(1 / 60, false); // тик раз в секунду
       this.whispers.tick();
       this.regenTick();
+      this.zoneTick();
       this.checkQuestSteps();
       this.checkAchievements();
       if (this.currentScene) this.refreshBgEffects(this.currentScene);
     }, 1000);
   }
 
-  /** Реген hp/foc вне боя (1 секунда) */
+  // ---------- зона аномалии: таймер экспозиции (C7) ----------
+  /** Вход/выход зоны при смене сцены: вернулся до конца отката — бюджет с остатка */
+  private zoneOnSceneChange(scene: Scene) {
+    const z = scene.zone;
+    if (z) {
+      if (this.zoneState && this.zoneState.sceneId === scene.id && this.zoneState.recoveryLeft > 0) {
+        this.zoneState.recoveryLeft = 0; // возврат до конца отката — продолжаем тратить старый запас
+      } else if (!this.zoneState || this.zoneState.sceneId !== scene.id || this.zoneState.recoveryLeft > 0) {
+        this.zoneState = { sceneId: scene.id, budgetLeft: z.exposureSec, recoveryLeft: 0, recoverySec: z.recoverySec };
+      }
+    } else if (this.zoneState && this.zoneState.recoveryLeft === 0) {
+      const full = this.zoneBudgetFull();
+      if (full !== null && this.zoneState.budgetLeft >= full) this.zoneState = null; // ничего не потратил
+      else this.zoneState.recoveryLeft = this.zoneState.recoverySec; // только что вышли — стартует откат
+    }
+    this.renderZoneCounter();
+  }
+
+  private zoneBudgetFull(): number | null {
+    const zs = this.zoneState;
+    if (!zs) return null;
+    return this.project.scenes.find((s) => s.id === zs.sceneId)?.zone?.exposureSec ?? null;
+  }
+
+  /** Секундный тик зоны: счёт, урон после истечения, жёсткий переход по HP, откат вне зоны */
+  private zoneTick() {
+    const zs = this.zoneState;
+    if (!zs) return;
+    const scene = this.currentScene;
+    const z = scene?.id === zs.sceneId ? scene?.zone : undefined;
+    if (z) {
+      zs.budgetLeft -= 1;
+      if (zs.budgetLeft < 0) {
+        const hpId = heroVarId(this.project, 'hp');
+        const hpMaxId = heroVarId(this.project, 'hp_max');
+        if (hpId) {
+          this.state[hpId] = Math.max(1, Number(this.state[hpId] ?? 0) - z.dmgPerSec);
+          this.opts.onVarsChanged?.(this.state);
+        }
+        const pct = z.hpExitPct ?? 50;
+        if (hpId && hpMaxId && Number(this.state[hpId]) <= Number(this.state[hpMaxId]) * pct / 100) {
+          const exit = (z.hpExits ?? []).find((x) => this.checkConditions(x.conditions));
+          if (exit && this.project.scenes.some((s) => s.id === exit.sceneId)) {
+            this.gotoScene(exit.sceneId); // сцена спасения; zoneOnSceneChange запустит откат
+            this.scheduleSave();
+            return;
+          }
+        }
+      }
+      this.scheduleSave();
+    } else if (zs.recoveryLeft > 0) {
+      zs.recoveryLeft -= 1;
+      if (zs.recoveryLeft <= 0) { this.zoneState = null; this.scheduleSave(); }
+    }
+    this.renderZoneCounter();
+  }
+
+  /** Диегетический таймер: ГГ считает про себя (у него нет интерфейса до Осколка) */
+  private renderZoneCounter() {
+    this.zoneLayer.innerHTML = '';
+    const zs = this.zoneState;
+    const scene = this.currentScene;
+    if (!zs || scene?.id !== zs.sceneId || !scene?.zone) return;
+    const elapsed = scene.zone.exposureSec - zs.budgetLeft;
+    const el = document.createElement('div');
+    const over = zs.budgetLeft < 0;
+    el.textContent = over ? 'сбился со счёта…' : `${ruNumber(Math.max(1, elapsed))}…`;
+    el.style.cssText = `position:absolute;top:4.5%;left:0;right:0;text-align:center;
+      font-size:0.62em;font-style:italic;letter-spacing:2px;font-weight:300;
+      color:${over ? '#e06c75' : '#8fa2af'};opacity:0.85;`;
+    this.zoneLayer.appendChild(el);
+  }
+
+  /** Реген hp/foc вне боя (1 секунда). В зоне аномалии hp не восстанавливается. */
   private regenTick() {
     if (!this.heroEnabled || !this.project.hero || this.inCombat) return;
-    const hpId = heroVarId(this.project, 'hp');
+    const inZone = !!this.currentScene?.zone;
+    const hpId = inZone ? null : heroVarId(this.project, 'hp');
     const focId = heroVarId(this.project, 'foc');
     const hpMaxId = heroVarId(this.project, 'hp_max');
     const focMaxId = heroVarId(this.project, 'foc_max');
@@ -578,6 +662,7 @@ export class Engine {
           wshown: [...this.whispers.shown],
           wlog: this.whispers.log,
           maploc: this.mapLoc,
+          zone: this.zoneState,
           buildId: this.opts.buildId,
         };
         localStorage.setItem(this.saveKey(), JSON.stringify(data));
@@ -709,6 +794,7 @@ export class Engine {
     const apply = () => {
       if (this.currentScene?.id !== scene.id) this.mapSelection = null; // сайдбар карты не тащим между сценами
       this.currentScene = scene;
+      this.zoneOnSceneChange(scene);
       this.renderScene();
       this.opts.onSceneChanged?.(scene);
       this.scheduleSave();
@@ -1993,6 +2079,25 @@ export class Engine {
     mk('Закрыть', () => { /* просто закрыть */ });
     this.invLayer.appendChild(menu);
   }
+}
+
+/** Число прописью (1..999) — «счёт про себя» в зонах аномалий */
+function ruNumber(n: number): string {
+  if (n <= 0) return 'ноль';
+  if (n > 999) return String(n);
+  const units = ['', 'один', 'два', 'три', 'четыре', 'пять', 'шесть', 'семь', 'восемь', 'девять'];
+  const teens = ['десять', 'одиннадцать', 'двенадцать', 'тринадцать', 'четырнадцать', 'пятнадцать', 'шестнадцать', 'семнадцать', 'восемнадцать', 'девятнадцать'];
+  const tens = ['', '', 'двадцать', 'тридцать', 'сорок', 'пятьдесят', 'шестьдесят', 'семьдесят', 'восемьдесят', 'девяносто'];
+  const hundreds = ['', 'сто', 'двести', 'триста', 'четыреста', 'пятьсот', 'шестьсот', 'семьсот', 'восемьсот', 'девятьсот'];
+  const parts: string[] = [];
+  if (n >= 100) parts.push(hundreds[Math.floor(n / 100)]);
+  const rest = n % 100;
+  if (rest >= 10 && rest < 20) parts.push(teens[rest - 10]);
+  else {
+    if (rest >= 20) parts.push(tens[Math.floor(rest / 10)]);
+    if (rest % 10 && (rest < 10 || rest >= 20)) parts.push(units[rest % 10]);
+  }
+  return parts.join(' ') || String(n);
 }
 
 /** Цвет индикатора отношения: красный → жёлтый → зелёный */
