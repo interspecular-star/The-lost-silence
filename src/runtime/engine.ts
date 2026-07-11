@@ -23,6 +23,7 @@ import {
 } from '../core/hero';
 import { runCombat } from './combat';
 import { renderJournal } from './journal';
+import { renderCampMap, campMapSig } from './campmap';
 
 interface InvCell { itemId: string; qty: number; }
 
@@ -53,6 +54,7 @@ interface SaveData {
   achievements?: Record<string, boolean>;   // достижения: id → разблокировано (навсегда)
   wshown?: string[];                        // шёпоты: уже прозвучавшие (не-repeatable)
   wlog?: WhisperLogEntry[];                 // журнал шёпота (последние 50)
+  maploc?: Record<string, string>;          // карты лагеря: id сцены-карты → id текущего узла
   buildId?: string;                         // штамп сборки, записавшей сейв
 }
 
@@ -110,6 +112,9 @@ export class Engine {
   activeDecode: { defId: string; startedAt: number } | null = null;
   achievements: Record<string, boolean> = {}; // id достижения → разблокировано (навсегда)
   whispers!: WhisperSystem;                    // канал Архона (H3)
+  // карта лагеря (блок I): «текущее положение» по сценам-картам + выбранный узел сайдбара
+  mapLoc: Record<string, string> = {};
+  mapSelection: string | null = null;
   private currentScene: Scene | null = null;
   private currentDialogue: Dialogue | null = null;
   /** NPC последней показанной реплики — определяет фракционный скин диалогового блока */
@@ -216,6 +221,7 @@ export class Engine {
         this.achievements = save.achievements ?? {};
         this.whispers.shown = new Set(save.wshown ?? []);
         this.whispers.log = save.wlog ?? [];
+        this.mapLoc = save.maploc ?? {};
         if (save.sceneId && this.project.scenes.some((s) => s.id === save.sceneId)) {
           startId = save.sceneId;
         }
@@ -571,6 +577,7 @@ export class Engine {
           decode: this.activeDecode,
           wshown: [...this.whispers.shown],
           wlog: this.whispers.log,
+          maploc: this.mapLoc,
           buildId: this.opts.buildId,
         };
         localStorage.setItem(this.saveKey(), JSON.stringify(data));
@@ -698,6 +705,7 @@ export class Engine {
     const scene = this.project.scenes.find((s) => s.id === id);
     if (!scene) return;
     const apply = () => {
+      if (this.currentScene?.id !== scene.id) this.mapSelection = null; // сайдбар карты не тащим между сценами
       this.currentScene = scene;
       this.renderScene();
       this.opts.onSceneChanged?.(scene);
@@ -772,7 +780,8 @@ export class Engine {
     // анимации текста (textfx) перезапускались бы на каждом тике.
     const sig = scene.id + '|' + visible
       .map((el) => `${el.id}:${el.type === 'image' ? (el.src?.length ?? 0) : this.interpolate(el.text ?? '')}`)
-      .join('|');
+      .join('|')
+      + (scene.campMap ? '|map:' + campMapSig(this, scene) : '');
     if (sig !== this.sceneSig) {
       this.sceneSig = sig;
       for (const t of this.elementFxTimers) clearTimeout(t);
@@ -783,6 +792,9 @@ export class Engine {
         if (el.fx) applyElementFx(d, el.fx, this.elementFxTimers); // титры/флэшбэки
         this.sceneLayer.appendChild(d);
       }
+      // карта лагеря — поверх элементов сцены; своё состояние (выбранный узел)
+      // держит в engine.mapSelection и переживает пересборку
+      if (scene.campMap?.nodes.length) renderCampMap(this, scene, this.sceneLayer);
     }
     this.renderHUD();
   }

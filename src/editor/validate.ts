@@ -154,6 +154,39 @@ export function validateProject(p: Project): Issue[] {
       else referencedDialogues.add(sc.onEnterDialogueId);
     }
 
+    // карта лагеря: узлы/дорожки/пометки
+    if (sc.campMap) {
+      const cfg = sc.campMap;
+      const mapNodeIds = new Set(cfg.nodes.map((n) => n.id));
+      if (!cfg.nodes.length) warn(whereScene, 'карта без узлов — в игре будет пустой план', goScene);
+      if (cfg.homeNodeId && !mapNodeIds.has(cfg.homeNodeId)) {
+        err(whereScene, 'узел «положения ГГ» на карте удалён', goScene);
+      }
+      for (const node of cfg.nodes) {
+        const whereNode = `${whereScene} → узел «${node.title}»`;
+        if (node.sceneId) {
+          if (!sceneById.has(node.sceneId)) err(whereNode, '«Войти» ведёт в удалённую сцену', goScene);
+          else referencedScenes.add(node.sceneId);
+        } else {
+          warn(whereNode, 'узел без сцены — «Войти» не появится (декорация)', goScene);
+        }
+        checkConds(node.lockedIf, `${whereNode} (условия «заперто»)`, goScene);
+        checkConds(node.visibleIf, `${whereNode} (условия видимости)`, goScene);
+        for (const m of node.marks ?? []) {
+          checkConds(m.conditions, `${whereNode}, пометка «${m.text}»`, goScene);
+          checkInterp(m.text, `${whereNode}, пометка`, goScene);
+        }
+        for (const id of node.npcIds ?? []) {
+          if (!npcById.has(id)) err(whereNode, 'в «кто здесь» удалённый NPC', goScene);
+        }
+      }
+      for (const link of cfg.links) {
+        if (!mapNodeIds.has(link.a) || !mapNodeIds.has(link.b)) {
+          warn(whereScene, 'дорожка карты ссылается на удалённый узел', goScene);
+        }
+      }
+    }
+
     for (const el of sc.elements) {
       const goEl = (s: Store) => { s.setMode('scene'); s.selectScene(sc.id); s.selectElements([el.id]); };
       const whereEl = `${whereScene} → «${el.name}»`;

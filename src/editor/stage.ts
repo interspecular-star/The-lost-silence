@@ -303,6 +303,9 @@ export class StageView {
       this.canvas.appendChild(this.renderElement(el));
     }
 
+    // сцена-карта: статичный план (ромбы/дорожки), поведение — только в F5
+    if (scene.campMap?.nodes.length) this.canvas.appendChild(this.renderCampMapPreview(scene));
+
     if (this.store.gridEnabled) {
       this.canvas.appendChild(h('div', { class: 'grid-overlay' }));
     }
@@ -315,6 +318,65 @@ export class StageView {
     for (const el of this.store.selectedElements) {
       this.renderSelection(el);
     }
+  }
+
+  /** Статичный план карты лагеря на холсте: те же ромбы/подписи/дорожки, без интерактива */
+  private renderCampMapPreview(scene: Scene): HTMLElement {
+    const cfg = scene.campMap!;
+    const wrap = h('div', { style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;pointer-events:none;` });
+    const byId = new Map(cfg.nodes.map((n) => [n.id, n]));
+    if (cfg.links.length) {
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('viewBox', `0 0 ${CANVAS_W} ${CANVAS_H}`);
+      svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
+      for (const link of cfg.links) {
+        const a = byId.get(link.a), b = byId.get(link.b);
+        if (!a || !b) continue;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', String((a.x / 100) * CANVAS_W));
+        line.setAttribute('y1', String((a.y / 100) * CANVAS_H));
+        line.setAttribute('x2', String((b.x / 100) * CANVAS_W));
+        line.setAttribute('y2', String((b.y / 100) * CANVAS_H));
+        line.setAttribute('stroke', 'rgba(255,255,255,0.14)');
+        line.setAttribute('stroke-width', '1.5');
+        line.setAttribute('stroke-dasharray', '4 9');
+        svg.appendChild(line);
+      }
+      wrap.appendChild(svg);
+    }
+    for (const node of cfg.nodes) {
+      const size = node.size ?? 14;
+      const hgt = size * 1.6;
+      const dimK = Math.max(0.25, 1 - (node.dim ?? 0) / 100);
+      const isHome = node.id === cfg.homeNodeId;
+      const dia = h('div', {
+        style: `position:absolute;left:${((node.x - size / 2) / 100) * CANVAS_W}px;top:${((node.y - hgt / 2) / 100) * CANVAS_H}px;
+          width:${(size / 100) * CANVAS_W}px;height:${(hgt / 100) * CANVAS_H}px;
+          clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);opacity:${dimK};
+          background:${isHome ? 'radial-gradient(circle at 50% 50%, rgba(79,209,197,0.16), rgba(79,209,197,0.02) 70%)' : 'rgba(255,255,255,0.035)'};
+          border:1px solid ${isHome ? 'rgba(79,209,197,0.4)' : 'rgba(255,255,255,0.14)'};`,
+      });
+      wrap.appendChild(dia);
+      const titlePx = Math.round(6 + size * 0.95); // как в игре: логическая сетка холста = игровая
+      const label = h('div', {
+        style: `position:absolute;left:${((node.x - size / 2) / 100) * CANVAS_W}px;top:${(node.y / 100) * CANVAS_H}px;
+          width:${(size / 100) * CANVAS_W}px;transform:translateY(-50%);text-align:center;opacity:${dimK};`,
+      });
+      label.appendChild(h('div', {
+        style: `font-size:${titlePx}px;font-weight:300;letter-spacing:0.11em;color:#e6edf3;text-transform:uppercase;`,
+        text: node.title,
+      }));
+      const firstMark = node.marks?.[0]?.text;
+      if (firstMark) {
+        label.appendChild(h('div', {
+          style: `font-size:${Math.max(9, titlePx - 6)}px;margin-top:4px;letter-spacing:0.05em;
+            color:${firstMark.startsWith('◊') ? '#4fd1c5' : '#5f7a8a'};`,
+          text: firstMark,
+        }));
+      }
+      wrap.appendChild(label);
+    }
+    return wrap;
   }
 
   private renderElement(el: SceneElement): HTMLElement {

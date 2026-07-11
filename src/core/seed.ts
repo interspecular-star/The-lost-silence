@@ -30,7 +30,11 @@ export function seedProject(): Project {
   const sCapsule = uid('scene'); // пробуждение №7301 (движение)
   const sLab = uid('scene');
   const sSurface = uid('scene'); // разлом / первый взгляд на мир
+  const sCampMap = uid('scene'); // карта лагеря (блок I: план с ромбами)
+  const sYard = uid('scene');    // двор лагеря (демо-заглушка карты)
   const sHangar = uid('scene');  // ангар Flux Nomads
+  const mnYard = uid('mn');      // узлы карты
+  const mnHangar = uid('mn');
 
   // ---- диалоги ----
   const dWake1 = uid('dlg');
@@ -638,7 +642,71 @@ export function seedProject(): Project {
           x: 710, y: 660, w: 500, h: 70,
           text: '➜ Спуститься в лагерь кочевников',
           style: btnStyle,
-          action: { type: 'gotoScene', sceneId: sHangar },
+          action: { type: 'gotoScene', sceneId: sCampMap },
+        },
+      ],
+    },
+
+    // ---------- КАРТА ЛАГЕРЯ (демо блока I) ----------
+    {
+      id: sCampMap,
+      name: 'Лагерь Flux Nomads',
+      kind: 'location',
+      background: 'linear-gradient(160deg, #04070c 0%, #0a1622 55%, #0d1a24 100%)',
+      guides: [],
+      elements: [
+        {
+          id: uid('el'), name: 'Кикер', type: 'text',
+          x: 40, y: 140, w: 640, h: 60,
+          text: 'ЛАГЕРЬ FLUX NOMADS',
+          style: { textColor: '#5f7a8a', fontSize: 20, fontWeight: '300', letterSpacing: 3 },
+        },
+      ],
+      campMap: {
+        homeNodeId: mnYard,
+        nodes: [
+          {
+            id: mnYard, title: 'Двор', sceneId: sYard,
+            x: 38, y: 55, size: 16,
+            tagline: 'костёр, кухня, разговоры',
+          },
+          {
+            id: mnHangar, title: 'Ангар', sceneId: sHangar,
+            x: 63, y: 38, size: 15,
+            tagline: 'сварка и лебёдки',
+            marks: [{ id: uid('mm'), text: '◊ Матис ждёт', conditions: [{ varId: vOskolok, op: 'eq', value: 0 }] }],
+          },
+        ],
+        links: [{ a: mnYard, b: mnHangar }],
+      },
+    },
+
+    // ---------- ДВОР (демо-заглушка карты) ----------
+    {
+      id: sYard,
+      name: 'Двор лагеря',
+      kind: 'location',
+      background: 'linear-gradient(180deg, #0d141b 0%, #1a222b 60%, #10161c 100%)',
+      guides: [],
+      elements: [
+        {
+          id: uid('el'), name: 'Кикер', type: 'text',
+          x: 40, y: 140, w: 640, h: 60,
+          text: 'ЛАГЕРЬ · ДВОР',
+          style: { textColor: '#5f7a8a', fontSize: 20, fontWeight: '300', letterSpacing: 3 },
+        },
+        {
+          id: uid('el'), name: 'Нарратив', type: 'text',
+          x: 310, y: 260, w: 1300, h: 220,
+          text: 'Костёр посреди двора горит, кажется, всегда — не для тепла, для разговора.\n\nЗдесь можно перевести дух между вылазками.',
+          style: { ...narrStyle, fontSize: 30 },
+        },
+        {
+          id: uid('el'), name: 'К схеме', type: 'button',
+          x: 40, y: 950, w: 320, h: 64,
+          text: '‹ К СХЕМЕ ЛАГЕРЯ',
+          style: { ...btnStyle, textColor: '#5f7a8a', borderColor: 'rgba(255,255,255,0.12)' },
+          action: { type: 'gotoScene', sceneId: sCampMap },
         },
       ],
     },
@@ -679,6 +747,13 @@ export function seedProject(): Project {
           text: 'Демо-версия интро завершается здесь.\nЗагляните в Журнал 📋 — там задания, улучшения дронов и расшифровка OldNet.\nКонтракты Flux Nomads уже капают кредитами — даже пока игра закрыта.',
           style: { textColor: '#5f7a8a', fontSize: 24, fontWeight: '300', textAlign: 'center', lineHeight: 1.4 },
           visibleIf: [{ varId: vOskolok, op: 'gte', value: 2 }],
+        },
+        {
+          id: uid('el'), name: 'К схеме', type: 'button',
+          x: 40, y: 950, w: 320, h: 64,
+          text: '‹ К СХЕМЕ ЛАГЕРЯ',
+          style: { ...btnStyle, textColor: '#5f7a8a', borderColor: 'rgba(255,255,255,0.12)' },
+          action: { type: 'gotoScene', sceneId: sCampMap },
         },
       ],
     },

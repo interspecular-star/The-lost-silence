@@ -8,6 +8,7 @@ import {
   ELEMENT_TYPE_LABELS, NODE_TYPE_LABELS, SCENE_KIND_LABELS, uid,
   BgEffectType, BG_EFFECT_META, SceneBackgroundAdjust, Scene,
   BoxSurface, BoxBorderFx, BoxStyle, BoxTempo, BoxIntensity, ElementFxKind, TextGuard,
+  CampMapNode,
 } from '../core/types';
 import { TEXT_GUARD_LABELS } from '../runtime/elementfx';
 import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS, BOX_TEMPO_LABELS, BOX_INTENSITY_LABELS } from '../runtime/boxfx';
@@ -119,6 +120,8 @@ export function mountInspector(root: HTMLElement, store: Store) {
         ['off', 'Скрывать'],
       ], (v) => mutate(() => { scene.hudMode = v as typeof scene.hudMode; }))),
     ));
+
+    root.appendChild(campMapSection(scene));
 
     const bgUpload = h('button', { class: 'btn small block', text: '📁 Загрузить картинку фона…' });
     bgUpload.onclick = async () => {
@@ -347,6 +350,144 @@ export function mountInspector(root: HTMLElement, store: Store) {
     libSection.appendChild(addMat);
     libSection.appendChild(h('div', { class: 'hint', text: 'Где назначить: реплика/диалог — в нодовом редакторе; NPC — в «Персонажах». Правка пресета меняет вид везде, где он использован.' }));
     root.appendChild(libSection);
+  }
+
+  // ================= КАРТА ЛАГЕРЯ (блок I) =================
+  function campMapSection(scene: Scene): HTMLElement {
+    const sec = section('Карта лагеря');
+    sec.appendChild(checkbox(!!scene.campMap, (v) => mutate(() => {
+      scene.campMap = v ? (scene.campMap ?? { nodes: [], links: [] }) : undefined;
+    }), 'эта сцена — карта (план с ромбами-локациями)'));
+    const cfg = scene.campMap;
+    if (!cfg) {
+      sec.appendChild(h('div', { class: 'hint', text: 'План лагеря по прототипу: ромбы-локации, дорожки, сайдбар «кто здесь» и кнопка ВОЙТИ. Обычные элементы сцены (заголовок, нарратив) рисуются под картой.' }));
+      return sec;
+    }
+
+    const nodeOptions = (): [string, string][] => [['', '— нет —'],
+      ...cfg.nodes.map((n) => [n.id, n.title || '(без названия)'] as [string, string])];
+    const sceneOptions: [string, string][] = [['', '— нет (декорация) —'],
+      ...store.project.scenes.filter((s) => s.id !== scene.id).map((s) => [s.id, s.name] as [string, string])];
+
+    sec.appendChild(row('Положение ГГ', selectInput(cfg.homeNodeId ?? '', nodeOptions(),
+      (v) => mutate(() => { cfg.homeNodeId = v || undefined; }))));
+    sec.appendChild(h('div', { class: 'hint', text: 'Узел «текущего положения» до первого входа куда-либо: он пульсирует, подпись внизу карты. Дальше движок запоминает, куда игрок входил.' }));
+
+    // ---- узлы ----
+    cfg.nodes.forEach((node) => {
+      const card = h('div', { class: 'cond-card' });
+      const head = h('div', { style: 'display:flex;gap:6px;align-items:center;' });
+      head.appendChild(textInput(node.title, (v) => mutate(() => { node.title = v; })));
+      const del = h('button', { class: 'del', text: '✕', title: 'Удалить узел' });
+      del.onclick = () => mutate(() => {
+        cfg.nodes = cfg.nodes.filter((n) => n.id !== node.id);
+        cfg.links = cfg.links.filter((l) => l.a !== node.id && l.b !== node.id);
+        if (cfg.homeNodeId === node.id) cfg.homeNodeId = undefined;
+      });
+      head.appendChild(del);
+      card.appendChild(head);
+
+      card.appendChild(row('Ведёт в сцену', selectInput(node.sceneId ?? '', sceneOptions,
+        (v) => mutate(() => { node.sceneId = v || undefined; }))));
+      const xy = h('div', { class: 'row' });
+      xy.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'X%' }));
+      xy.appendChild(numberInput(node.x, (v) => mutate(() => { node.x = Math.max(0, Math.min(100, v)); })));
+      xy.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Y%' }));
+      xy.appendChild(numberInput(node.y, (v) => mutate(() => { node.y = Math.max(0, Math.min(100, v)); })));
+      card.appendChild(xy);
+      const sz = h('div', { class: 'row' });
+      sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Размер' }));
+      sz.appendChild(numberInput(node.size ?? 14, (v) => mutate(() => { node.size = Math.max(3, Math.min(40, v)); })));
+      sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', title: 'Приглушение «дальнего плана», 0–100', text: 'Даль' }));
+      sz.appendChild(numberInput(node.dim ?? 0, (v) => mutate(() => { node.dim = Math.max(0, Math.min(100, v)) || undefined; })));
+      card.appendChild(sz);
+      card.appendChild(row('Примета', textInput(node.tagline ?? '', (v) => mutate(() => { node.tagline = v || undefined; }))));
+
+      // живые пометки
+      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Живые пометки (◊ — акцент; на карте видна первая активная):' }));
+      for (const m of node.marks ?? []) {
+        const mc = h('div', { class: 'cond-card' });
+        const mr = h('div', { class: 'row' });
+        mr.appendChild(textInput(m.text, (v) => mutate(() => { m.text = v; })));
+        const mdel = h('button', { class: 'del', text: '✕' });
+        mdel.onclick = () => mutate(() => { node.marks = (node.marks ?? []).filter((x) => x.id !== m.id); });
+        mr.appendChild(mdel);
+        mc.appendChild(mr);
+        mc.appendChild(conditionsEditor(m.conditions, (list) => mutate(() => { m.conditions = list; })));
+        card.appendChild(mc);
+      }
+      const addMark = h('button', { class: 'btn small', text: '+ пометка' });
+      addMark.onclick = () => mutate(() => {
+        node.marks = [...(node.marks ?? []), { id: uid('mm'), text: '◊ есть разговор', conditions: [] }];
+      });
+      card.appendChild(addMark);
+
+      // кто здесь
+      const npcs = store.project.npcs ?? [];
+      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Кто здесь (сайдбар):' }));
+      for (const id of node.npcIds ?? []) {
+        const npc = npcs.find((n) => n.id === id);
+        const nr = h('div', { class: 'row' });
+        nr.appendChild(h('span', { style: 'flex:1;font-size:12px;', text: npc ? npc.name : '(удалённый NPC)' }));
+        const ndel = h('button', { class: 'del', text: '✕' });
+        ndel.onclick = () => mutate(() => { node.npcIds = (node.npcIds ?? []).filter((x) => x !== id); });
+        nr.appendChild(ndel);
+        card.appendChild(nr);
+      }
+      const freeNpcs = npcs.filter((n) => !(node.npcIds ?? []).includes(n.id));
+      if (freeNpcs.length) {
+        card.appendChild(selectInput('', [['', '+ добавить персонажа…'],
+          ...freeNpcs.map((n) => [n.id, n.name] as [string, string])],
+          (v) => { if (v) mutate(() => { node.npcIds = [...(node.npcIds ?? []), v]; }); }));
+      }
+
+      // заперто
+      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Заперто, когда все условия верны (пусто — открыто):' }));
+      card.appendChild(conditionsEditor(node.lockedIf ?? [], (list) => mutate(() => {
+        node.lockedIf = list.length ? list : undefined;
+      })));
+      if (node.lockedIf?.length) {
+        card.appendChild(row('Текст запрета', textInput(node.lockedText ?? '', (v) => mutate(() => {
+          node.lockedText = v || undefined;
+        }))));
+      }
+
+      // видимость
+      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Узел виден при условии (пусто — всегда):' }));
+      card.appendChild(conditionsEditor(node.visibleIf ?? [], (list) => mutate(() => {
+        node.visibleIf = list.length ? list : undefined;
+      })));
+
+      sec.appendChild(card);
+    });
+    const addNode = h('button', { class: 'btn small', text: '+ узел' });
+    addNode.onclick = () => mutate(() => {
+      cfg.nodes.push({
+        id: uid('mn'), title: 'Новая локация', x: 50, y: 50, size: 14,
+      } as CampMapNode);
+    });
+    sec.appendChild(addNode);
+
+    // ---- дорожки ----
+    if (cfg.nodes.length >= 2) {
+      sec.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:8px;', text: 'Дорожки (пунктир между узлами):' }));
+      cfg.links.forEach((link, i) => {
+        const lr = h('div', { class: 'row' });
+        lr.appendChild(selectInput(link.a, nodeOptions(), (v) => mutate(() => { link.a = v; })));
+        lr.appendChild(selectInput(link.b, nodeOptions(), (v) => mutate(() => { link.b = v; })));
+        const ldel = h('button', { class: 'del', text: '✕' });
+        ldel.onclick = () => mutate(() => { cfg.links = cfg.links.filter((_, j) => j !== i); });
+        lr.appendChild(ldel);
+        sec.appendChild(lr);
+      });
+      const addLink = h('button', { class: 'btn small', text: '+ дорожка' });
+      addLink.onclick = () => mutate(() => {
+        cfg.links.push({ a: cfg.nodes[0].id, b: cfg.nodes[1]?.id ?? cfg.nodes[0].id });
+      });
+      sec.appendChild(addLink);
+    }
+    sec.appendChild(h('div', { class: 'hint', text: 'В игре: клик по ромбу — сайдбар с приметой и «кто здесь», кнопка ВОЙТИ (или повторный клик по ромбу) — переход в сцену. Пометки и замки живут по условиям. Холст показывает план статично; поведение — в предпросмотре (F5).' }));
+    return sec;
   }
 
   // палитра + пипетка + текст (см. colorui.ts)
