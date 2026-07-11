@@ -45,7 +45,9 @@ export class WhisperSystem {
   private layer: HTMLElement;
   private glyph: HTMLElement | null = null;
   private timers: number[] = [];
-  private lastShownAt = 0;            // общий тайминг канала (для idle-пауз)
+  // общий тайминг канала (для idle-пауз): отсчёт тишины — со старта игры,
+  // иначе первый idle-шёпот выстреливал мгновенно («молчали с 1970 года»)
+  private lastShownAt = Date.now();
   private cooldowns: Record<string, number> = {}; // id → когда можно снова (repeatable)
   private destroyed = false;
 

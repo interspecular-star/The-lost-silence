@@ -130,7 +130,9 @@ export interface Scene {
   elements: SceneElement[];
   guides: Guide[];
   onEnterDialogueId?: string; // диалог, запускаемый при входе в сцену
-  hudMode?: 'auto' | 'on' | 'off'; // 'auto' — HUD скрыт на страницах, показан на локациях/уровнях
+  // 'auto' — HUD скрыт на страницах, показан на локациях/уровнях;
+  // 'oskolok' — появляется только с Осколком ур. 1+ (лагерь до финала акта 1 гл. 1)
+  hudMode?: 'auto' | 'on' | 'off' | 'oskolok';
   dialogueBoxStyle?: BoxStyle; // переопределение материала диалога на этой сцене (> фракции > темы)
   choiceStyle?: BoxStyle;      // переопределение материала вариантов на этой сцене (> темы)
   autoNext?: { sceneId: string; delaySec: number }; // автопереход (флэшбэки, титры глав)
@@ -256,6 +258,8 @@ export interface DialogueNode {
   // set
   effects?: Effect[];
   giveItems?: ItemGrant[];   // выдать предметы (нода «Действие»)
+  takeItems?: ItemGrant[];   // забрать предметы (qty 0 = все, сколько есть); квестовые сдачи, торговля
+  sellTake?: boolean;        // начислить цену забранного в валюту проекта (currencyVarName)
   // branch
   conditions?: Condition[];
   nextTrue?: string | null;

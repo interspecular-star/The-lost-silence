@@ -49,9 +49,10 @@ export function runCombat(
   let currentAttack: MobAttack = attacks[0];
   let reactionSpent = false;
   let guarding = false;
-  // скан доступен только с Осколком (ур. 1+); без настроенной переменной — всегда
+  // боевой скан — способность Осколка ур. 4 (лестница 0–10, oskolok-mesh.md §4);
+  // без настроенной переменной oskolok — всегда доступен
   let scanned = false;
-  const canScan = engine.oskolokLevel >= 1;
+  const canScan = engine.oskolokLevel >= 4;
   let rafId = 0;
 
   // ---------- UI ----------
@@ -301,7 +302,7 @@ export function runCombat(
     teleWrap.style.opacity = '1';
     teleLabel.style.opacity = '1';
     // окно реакции: шире с ловкостью
-    const windowMs = Math.min(currentAttack.telegraphMs, 350 + v('agi') * 15);
+    const windowMs = Math.min(currentAttack.telegraphMs * 0.7, 350 + v('agi') * 15);
     zoneMark.style.width = `${(windowMs / currentAttack.telegraphMs) * 100}%`;
     if (scanned && attacks.length > 1) {
       teleLabel.textContent = `${currentAttack.name.toUpperCase()} — ЖМИ В ЗЕЛЁНОЙ ЗОНЕ`;
@@ -329,7 +330,7 @@ export function runCombat(
   function tryDodge() {
     if (phase !== 'telegraph' || reactionSpent) return;
     const left = reactionWindowLeft();
-    const windowMs = Math.min(currentAttack.telegraphMs, 350 + v('agi') * 15);
+    const windowMs = Math.min(currentAttack.telegraphMs * 0.7, 350 + v('agi') * 15);
     if (left <= windowMs) {
       endTelegraph();
       guarding = false;
@@ -345,7 +346,7 @@ export function runCombat(
   function tryParry() {
     if (phase !== 'telegraph' || reactionSpent) return;
     const left = reactionWindowLeft();
-    const windowMs = Math.min(currentAttack.telegraphMs, 350 + v('agi') * 15) * 0.45;
+    const windowMs = Math.min(currentAttack.telegraphMs * 0.7, 350 + v('agi') * 15) * 0.45;
     if (left <= windowMs) {
       endTelegraph();
       guarding = false;

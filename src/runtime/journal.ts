@@ -266,7 +266,8 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
       title.textContent = `Расшифровка: ${def?.title ?? '?'}`;
       title.style.fontWeight = '600';
       info.appendChild(title);
-      const total = (def?.durationMin ?? 1) * 60000;
+      // полевой дешифратор — способность Осколка ур. 8: расшифровка вдвое быстрее
+      const total = (def?.durationMin ?? 1) * 60000 * (engine.oskolokLevel >= 8 ? 0.5 : 1);
       const elapsed = Date.now() - active.startedAt;
       const left = Math.max(0, total - elapsed);
       const bar = document.createElement('div');
@@ -318,7 +319,8 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
         title.style.fontWeight = '600';
         info.appendChild(title);
         const d = document.createElement('div');
-        d.textContent = `Расшифровка: ~${def.durationMin} мин реального времени (идёт и когда игра закрыта)`;
+        const decMin = engine.oskolokLevel >= 8 ? Math.ceil(def.durationMin / 2) : def.durationMin;
+        d.textContent = `Расшифровка: ~${decMin} мин реального времени (идёт и когда игра закрыта)${engine.oskolokLevel >= 8 ? ' · ◈ дешифратор' : ''}`;
         d.style.cssText = 'font-size:0.75em;opacity:0.6;';
         info.appendChild(d);
         const rw = rewardLabel(def.rewardEffects, def.rewardItems);

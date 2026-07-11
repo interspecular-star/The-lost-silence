@@ -77,7 +77,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     root.appendChild(section('Уровни Осколка',
       h('div', {
         class: 'hint',
-        text: 'Переменная oskolok управляет тем, что видит игрок:\n\n0 — устройства нет, репутация скрыта\n1 — шкала отношения собеседника в диалоге\n2 — панель репутации фракций (кнопка ◈ в игре)\n3 — подсказки ▲▼ у вариантов ответа\n4 — следы OldNet (будущая фаза)\n\nВыдайте устройство эффектом «oskolok = 1» в нужном месте сюжета.',
+        text: 'Переменная oskolok управляет тем, что видит игрок (лестница 0–10, канон docs/dev/oskolok-mesh.md):\n\n0 — устройства нет, репутация скрыта\n1 — шкала отношения в диалоге, голос Mesh (тумблер MESH в HUD), HUD на сценах «С Осколка»\n2 — панель репутации фракций (◈)\n3 — подсказки ▲▼ у вариантов ответа\n4 — боевой скан (цифры/защита/атаки моба)\n5 — чтение разметки аномалий (будущая фаза)\n6 — глубокое чтение людей (страхи/желания в профиле)\n7 — следы OldNet (будущая фаза)\n8 — полевой дешифратор (расшифровка ×2 быстрее)\n9 — тихий канал (будущая фаза)\n10 — зарезервирован под финал\n\nВыдайте устройство эффектом «oskolok = 1» в нужном месте сюжета. Апгрейды материальные — каждый уровень собирается из деталей.',
       }),
     ));
     root.appendChild(section('Формула репутации',
@@ -118,6 +118,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
         ['auto', 'Авто (скрыт на страницах)'],
         ['on', 'Показывать'],
         ['off', 'Скрывать'],
+        ['oskolok', 'С Осколка (ур. 1+)'],
       ], (v) => mutate(() => { scene.hudMode = v as typeof scene.hudMode; }))),
     ));
 
@@ -984,6 +985,14 @@ export function mountInspector(root: HTMLElement, store: Store) {
       sec.appendChild(itemGrantsEditor(node.giveItems ?? [], (list) => mutate(() => {
         node.giveItems = list.length ? list : undefined;
       })));
+      sec.appendChild(h('div', { class: 'insp-section-title', style: 'margin-top:10px;', text: 'Забрать предметы (кол-во 0 = все)' }));
+      sec.appendChild(itemGrantsEditor(node.takeItems ?? [], (list) => mutate(() => {
+        node.takeItems = list.length ? list : undefined;
+      })));
+      if (node.takeItems?.length) {
+        sec.appendChild(checkbox(!!node.sellTake, (v) => mutate(() => { node.sellTake = v || undefined; }),
+          'начислить цену забранного в валюту (продажа)'));
+      }
       if ((store.project.whispers ?? []).length > 0) {
         sec.appendChild(h('div', { class: 'insp-section-title', style: 'margin-top:10px;', text: '◈ Прошептать' }));
         sec.appendChild(row('Шёпот', selectInput(node.whisperId ?? '', [
@@ -1052,7 +1061,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
       }));
       const qty = numberInput(g.qty, (v) => {
         const copy = list.map((x) => ({ ...x }));
-        copy[i].qty = Math.max(1, Math.round(v));
+        copy[i].qty = Math.max(0, Math.round(v)); // 0 в «забрать» = все, сколько есть
         commit(copy);
       });
       qty.style.width = '84px';

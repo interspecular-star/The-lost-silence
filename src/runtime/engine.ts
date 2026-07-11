@@ -902,6 +902,7 @@ export class Engine {
     const mode = this.currentScene?.hudMode ?? 'auto';
     if (mode === 'on') return true;
     if (mode === 'off') return false;
+    if (mode === 'oskolok') return this.oskolokLevel >= 1; // интерфейс приходит вместе с Осколком
     return this.currentScene?.kind !== 'page';
   }
 
@@ -969,6 +970,34 @@ export class Engine {
       const j = quietBtn('📋', 'Журнал: задания, улучшения, OldNet, персонажи, достижения');
       j.onclick = () => this.openJournal();
       wrap.appendChild(j);
+    }
+
+    // переключатель Mesh (канон oskolok-mesh.md §5): глиф-тумблер, никаких слов ON/OFF
+    const meshVar = this.project.variables.find((x) => x.name === 'mesh_on');
+    if (meshVar && this.oskolokLevel >= 1) {
+      const on = !!this.state[meshVar.id];
+      const b = document.createElement('div');
+      b.title = on ? 'Mesh включён — щёлкните, чтобы выключить' : 'Mesh выключен — щёлкните, чтобы включить';
+      b.style.cssText = `display:flex;flex-direction:column;align-items:center;justify-content:center;
+        width:2.2em;height:1.9em;cursor:pointer;pointer-events:auto;user-select:none;position:relative;
+        opacity:${on ? '0.9' : '0.45'};transition:opacity .15s;`;
+      const g = document.createElement('div');
+      g.textContent = '◈';
+      g.style.cssText = `font-size:0.85em;line-height:1;color:${on ? accent : '#5f7a8a'};`;
+      const lbl = document.createElement('div');
+      lbl.textContent = 'MESH';
+      lbl.style.cssText = 'font-size:0.3em;letter-spacing:2px;color:#5f7a8a;margin-top:0.25em;';
+      b.append(g, lbl);
+      if (!on) {
+        const cross = document.createElement('div');
+        cross.style.cssText = `position:absolute;top:8%;left:30%;width:40%;height:60%;pointer-events:none;
+          background:linear-gradient(to top right, transparent 46%, #5f7a8a 48%, #5f7a8a 52%, transparent 54%);`;
+        b.appendChild(cross);
+      }
+      b.onmouseenter = () => { b.style.opacity = '1'; };
+      b.onmouseleave = () => { b.style.opacity = on ? '0.9' : '0.45'; };
+      b.onclick = () => this.applyEffects([{ varId: meshVar.id, op: 'toggle', value: true }]);
+      wrap.appendChild(b);
     }
 
     this.hudLayer.appendChild(wrap);
@@ -1162,7 +1191,7 @@ export class Engine {
   giveItems(grants: ItemGrant[], silent = false) {
     for (const g of grants) {
       const def = this.itemDef(g.itemId);
-      if (!def) continue;
+      if (!def || g.qty <= 0) continue;
       let left = g.qty;
       const stackMax = Math.max(1, def.stack ?? 1);
       // добиваем существующие стеки
@@ -1179,6 +1208,42 @@ export class Engine {
         left -= add;
       }
       if (!silent) this.notify(`+ ${def.name}${g.qty > 1 ? ` ×${g.qty}` : ''}`, RARITY_META[def.rarity].color);
+    }
+    this.recomputeDerived();
+    this.scheduleSave();
+    if (this.invOpen) this.renderInventory();
+  }
+
+  /** Забрать предметы из инвентаря (qty 0 = все, сколько есть). Экипированное не трогает.
+   *  sell=true — начислить цену забранного в валюту проекта (основа торговли, C7/C3). */
+  takeItems(grants: ItemGrant[], sell = false) {
+    let earned = 0;
+    for (const g of grants) {
+      const def = this.itemDef(g.itemId);
+      if (!def) continue;
+      let toTake = g.qty > 0 ? g.qty : Infinity;
+      let taken = 0;
+      for (const cell of this.inventory) {
+        if (toTake <= 0) break;
+        if (cell.itemId !== g.itemId) continue;
+        const take = Math.min(toTake, cell.qty);
+        cell.qty -= take;
+        toTake -= take;
+        taken += take;
+      }
+      this.inventory = this.inventory.filter((c) => c.qty > 0);
+      if (taken > 0) {
+        earned += taken * (def.price ?? 0);
+        this.notify(`− ${def.name}${taken > 1 ? ` ×${taken}` : ''}`, '#8a949e');
+      }
+    }
+    if (sell && earned > 0) {
+      const curName = this.project.currencyVarName ?? 'credits';
+      const curDef = this.project.variables.find((v) => v.name === curName);
+      if (curDef) {
+        this.state[curDef.id] = Number(this.state[curDef.id] ?? 0) + earned;
+        this.notify(`⌬ +${earned}`, this.project.theme.accent);
+      }
     }
     this.recomputeDerived();
     this.scheduleSave();
@@ -1314,6 +1379,7 @@ export class Engine {
     switch (n.type) {
       case 'set':
         if (n.giveItems?.length) this.giveItems(n.giveItems);
+        if (n.takeItems?.length) this.takeItems(n.takeItems, !!n.sellTake);
         this.applyEffects(n.effects);
         if (n.whisperId) this.whispers.whisper(n.whisperId); // «прошептать»
         this.advance(n.next);
@@ -1719,8 +1785,13 @@ export class Engine {
     section('Характер', npc.personality);
     section('Сильные стороны', npc.strengths);
     section('Слабые стороны', npc.weaknesses);
-    section('Страхи', npc.fears);
-    section('Желания', npc.wants);
+    // глубокое чтение людей — способность Осколка ур. 6 (канон oskolok-mesh.md §4)
+    if (this.oskolokLevel >= 6) {
+      section('Страхи', npc.fears);
+      section('Желания', npc.wants);
+    } else if (npc.fears || npc.wants) {
+      section('Страхи и желания', '◈ сигнатура не читается — нужен Осколок ур. 6');
+    }
     section('Отношение к Archon', npc.archonView);
     section('Отношение к OldNet', npc.oldnetView);
 

@@ -283,6 +283,7 @@ export function validateProject(p: Project): Issue[] {
       if (n.type === 'set') {
         checkEffects(n.effects, whereNode, goNode);
         checkItems(n.giveItems, whereNode, goNode);
+        checkItems(n.takeItems, `${whereNode} (забрать предметы)`, goNode);
       }
       if (n.type === 'branch') checkConds(n.conditions, whereNode, goNode);
       if (n.type === 'jump') {
