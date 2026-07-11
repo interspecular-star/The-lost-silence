@@ -4,7 +4,7 @@
 
 import { Store } from '../core/store';
 import {
-  Scene, SceneKind, Dialogue, uid, deepClone,
+  Scene, SceneKind, SceneFolder, Dialogue, uid, deepClone,
   SCENE_KIND_LABELS, ELEMENT_TYPE_LABELS,
 } from '../core/types';
 import { h, promptModal, confirmModal, toast } from './ui';
@@ -12,6 +12,7 @@ import { openDraftPanel } from './draft';
 
 const KIND_ICONS: Record<SceneKind, string> = { page: '▤', location: '◈', level: '⬢' };
 const COLLAPSE_KEY = 'tls_sidebar_collapsed_kinds';
+const COLLAPSE_FOLDERS_KEY = 'tls_sidebar_collapsed_folders';
 
 export function mountSidebar(root: HTMLElement, store: Store) {
   const collapsedKinds = new Set<SceneKind>(
@@ -19,6 +20,12 @@ export function mountSidebar(root: HTMLElement, store: Store) {
   );
   const saveCollapsed = () => {
     localStorage.setItem(COLLAPSE_KEY, JSON.stringify([...collapsedKinds]));
+  };
+  const collapsedFolders = new Set<string>(
+    JSON.parse(localStorage.getItem(COLLAPSE_FOLDERS_KEY) ?? '[]') as string[],
+  );
+  const saveCollapsedFolders = () => {
+    localStorage.setItem(COLLAPSE_FOLDERS_KEY, JSON.stringify([...collapsedFolders]));
   };
 
   const render = () => {
@@ -73,12 +80,74 @@ export function mountSidebar(root: HTMLElement, store: Store) {
   }
 
   // ---------- сцены ----------
+  const folders = (): SceneFolder[] => store.project.sceneFolders ?? [];
+  const folderOf = (s: Scene): SceneFolder | undefined =>
+    s.folderId ? folders().find((f) => f.id === s.folderId) : undefined;
+
   function renderScenes() {
     const list = h('div', { class: 'sb-section', style: 'flex:0 0 auto;max-height:55%;' });
     const kinds: SceneKind[] = ['page', 'location', 'level'];
 
+    // ---- папки (главы) ----
+    for (const folder of folders()) {
+      const scenesIn = store.project.scenes.filter((s) => s.folderId === folder.id);
+      const collapsed = collapsedFolders.has(folder.id);
+      const header = h('div', { class: 'sb-header' });
+      const titleWrap = h('div', { class: 'sb-header-title' });
+      titleWrap.appendChild(h('span', { class: 'sb-collapse-arrow', text: collapsed ? '▸' : '▾' }));
+      titleWrap.appendChild(h('span', { text: `📁 ${folder.name} (${scenesIn.length})` }));
+      titleWrap.onclick = () => {
+        if (collapsed) collapsedFolders.delete(folder.id); else collapsedFolders.add(folder.id);
+        saveCollapsedFolders();
+        render();
+      };
+      header.appendChild(titleWrap);
+      const menuBtn = h('button', { class: 'sb-menu-btn', text: '⋯', title: 'Действия с папкой' });
+      menuBtn.onclick = (e) => { e.stopPropagation(); showFolderMenu(folder, menuBtn); };
+      header.appendChild(menuBtn);
+      const add = h('button', { class: 'sb-add', text: '+', title: 'Новая сцена в папке (тип «Локация» — меняется в инспекторе)' });
+      add.onclick = async (e) => {
+        e.stopPropagation();
+        const name = await promptModal(`Сцена в «${folder.name}»`, '', 'Например: Руины у периметра');
+        if (!name) return;
+        store.snapshot();
+        const scene: Scene = {
+          id: uid('scene'), name, kind: 'location', folderId: folder.id,
+          background: '#0b1016', elements: [], guides: [],
+        };
+        store.project.scenes.push(scene);
+        store.emit('change');
+        store.selectScene(scene.id);
+      };
+      header.appendChild(add);
+      list.appendChild(header);
+      if (!collapsed) {
+        for (const scene of scenesIn) list.appendChild(sceneItem(scene, true));
+        if (scenesIn.length === 0) {
+          list.appendChild(h('div', { class: 'hint', style: 'padding:2px 12px 6px 26px;', text: 'Пусто. Добавьте сцену кнопкой «+» или перенесите существующую через её меню ⋯' }));
+        }
+      }
+    }
+
+    // ---- кнопка новой папки ----
+    const addFolderRow = h('div', {
+      class: 'sb-item', style: 'color:var(--text-dim);font-size:12px;',
+    });
+    addFolderRow.appendChild(h('span', { class: 'sb-icon', text: '+' }));
+    addFolderRow.appendChild(h('span', { class: 'sb-name', text: '📁 Новая папка (глава)' }));
+    addFolderRow.onclick = async () => {
+      const name = await promptModal('Название папки', '', 'Например: Глава 1 — Осколок');
+      if (!name) return;
+      store.snapshot();
+      store.project.sceneFolders = [...folders(), { id: uid('fld'), name }];
+      store.emit('change');
+    };
+    list.appendChild(addFolderRow);
+
+    // ---- сцены без папки: группы по типам ----
+    const loose = store.project.scenes.filter((s) => !folderOf(s));
     for (const kind of kinds) {
-      const scenesOfKind = store.project.scenes.filter((s) => s.kind === kind);
+      const scenesOfKind = loose.filter((s) => s.kind === kind);
       const collapsed = collapsedKinds.has(kind);
 
       const header = h('div', { class: 'sb-header' });
@@ -148,10 +217,11 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     }
   }
 
-  function sceneItem(scene: Scene): HTMLElement {
+  function sceneItem(scene: Scene, inFolder = false): HTMLElement {
     const item = h('div', {
       class: `sb-item${store.currentSceneId === scene.id ? ' active' : ''}`,
       'data-scene-id': scene.id,
+      ...(inFolder ? { style: 'padding-left:18px;' } : {}),
     });
     const handle = h('span', { class: 'sb-drag-handle', text: '⠿', title: 'Перетащить для изменения порядка' });
     handle.onpointerdown = (e) => startSceneDrag(scene, e);
@@ -185,7 +255,11 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.sb-item[data-scene-id]') as HTMLElement | null;
       if (!el || el.dataset.sceneId === scene.id) return null;
       const targetScene = store.project.scenes.find((s) => s.id === el.dataset.sceneId);
-      if (!targetScene || targetScene.kind !== scene.kind) return null;
+      if (!targetScene) return null;
+      // порядок меняется внутри одной группы: тот же тип (вне папок) или та же папка
+      const sameFolder = scene.folderId && targetScene.folderId === scene.folderId;
+      const sameKindLoose = !folderOf(scene) && !folderOf(targetScene) && targetScene.kind === scene.kind;
+      if (!sameFolder && !sameKindLoose) return null;
       return { el, targetScene };
     };
 
@@ -271,6 +345,7 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       store.emit('change');
       store.selectScene(copy.id);
     });
+    mkItem('📁 В папку…', () => showMoveToFolderMenu(scene, anchor));
     mkItem('🗑 Удалить', async () => {
       if (store.project.scenes.length <= 1) { toast('Нельзя удалить последнюю сцену', true); return; }
       if (!(await confirmModal('Удалить сцену', `Сцена «${scene.name}» будет удалена. Продолжить?`))) return;
@@ -291,6 +366,129 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close); }
     };
     setTimeout(() => document.addEventListener('mousedown', close), 0);
+  }
+
+  // ---------- меню папок ----------
+  function ctxMenu(anchor: HTMLElement): { menu: HTMLElement; mkItem: (label: string, fn: () => void, danger?: boolean) => void } {
+    document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
+    const rect = anchor.getBoundingClientRect();
+    const menu = h('div', {
+      class: 'ctx-menu',
+      style: `position:fixed;left:${rect.left}px;top:${rect.bottom + 4}px;z-index:250;
+        background:var(--bg-panel2);border:1px solid var(--border-light);border-radius:7px;
+        padding:4px;min-width:190px;box-shadow:0 10px 40px rgba(0,0,0,.5);`,
+    });
+    const mkItem = (label: string, fn: () => void, danger = false) => {
+      const it = h('div', {
+        style: `padding:6px 12px;cursor:pointer;border-radius:5px;font-size:12.5px;${danger ? 'color:var(--danger);' : ''}`,
+        text: label,
+      });
+      it.onmouseenter = () => { it.style.background = 'var(--bg-panel)'; };
+      it.onmouseleave = () => { it.style.background = ''; };
+      it.onclick = () => { menu.remove(); fn(); };
+      menu.appendChild(it);
+    };
+    document.body.appendChild(menu);
+    const close = (e: MouseEvent) => {
+      if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close); }
+    };
+    setTimeout(() => document.addEventListener('mousedown', close), 0);
+    return { menu, mkItem };
+  }
+
+  function showMoveToFolderMenu(scene: Scene, anchor: HTMLElement) {
+    const { mkItem } = ctxMenu(anchor);
+    if (folderOf(scene)) {
+      mkItem('— без папки —', () => {
+        store.snapshot();
+        scene.folderId = undefined;
+        store.emit('change');
+      });
+    }
+    for (const f of folders()) {
+      if (f.id === scene.folderId) continue;
+      mkItem(`📁 ${f.name}`, () => {
+        store.snapshot();
+        scene.folderId = f.id;
+        store.emit('change');
+      });
+    }
+    mkItem('+ новая папка…', async () => {
+      const name = await promptModal('Название папки', '', 'Например: Глава 1 — Осколок');
+      if (!name) return;
+      store.snapshot();
+      const f: SceneFolder = { id: uid('fld'), name };
+      store.project.sceneFolders = [...folders(), f];
+      scene.folderId = f.id;
+      store.emit('change');
+    });
+  }
+
+  function showFolderMenu(folder: SceneFolder, anchor: HTMLElement) {
+    const { mkItem } = ctxMenu(anchor);
+    const scenesIn = () => store.project.scenes.filter((s) => s.folderId === folder.id);
+
+    mkItem('✎ Переименовать', async () => {
+      const name = await promptModal('Новое название папки', folder.name);
+      if (!name) return;
+      store.snapshot();
+      folder.name = name;
+      store.emit('change');
+    });
+    mkItem('⧉ Дублировать (со сценами)', () => {
+      store.snapshot();
+      const copyFolder: SceneFolder = { id: uid('fld'), name: folder.name + ' (копия)' };
+      store.project.sceneFolders = [...folders(), copyFolder];
+      const src = scenesIn();
+      const idMap = new Map<string, string>();
+      const copies = src.map((s) => {
+        const c = deepClone(s);
+        const nid = uid('scene');
+        idMap.set(s.id, nid);
+        c.id = nid;
+        c.name = s.name + ' (копия)'; // иначе в селектах сцен дубликаты неотличимы
+        c.folderId = copyFolder.id;
+        c.elements.forEach((el) => { el.id = uid('el'); });
+        return c;
+      });
+      // внутренние ссылки сцена→сцена перенаправляем на копии; внешние остаются
+      const remap = (id: string | undefined): string | undefined => (id ? idMap.get(id) ?? id : id);
+      for (const c of copies) {
+        for (const el of c.elements) {
+          if (el.action?.sceneId) el.action.sceneId = remap(el.action.sceneId)!;
+        }
+        if (c.autoNext) c.autoNext.sceneId = remap(c.autoNext.sceneId)!;
+        if (c.zone?.hpExits) c.zone.hpExits.forEach((x) => { x.sceneId = remap(x.sceneId)!; });
+        if (c.campMap) c.campMap.nodes.forEach((n) => { n.sceneId = remap(n.sceneId); });
+      }
+      store.project.scenes.push(...copies);
+      store.emit('change');
+      toast(`Папка продублирована (${copies.length} сцен). Диалоги общие: jump-переходы в них по-прежнему ведут в оригинальные сцены.`);
+    });
+    mkItem('▣ Расформировать (сцены наружу)', async () => {
+      if (!(await confirmModal('Расформировать папку', `Сцены останутся в проекте, папка «${folder.name}» исчезнет. Продолжить?`))) return;
+      store.snapshot();
+      for (const s of scenesIn()) s.folderId = undefined;
+      store.project.sceneFolders = folders().filter((f) => f.id !== folder.id);
+      store.emit('change');
+    });
+    mkItem('🗑 Удалить вместе со сценами', async () => {
+      const doomed = scenesIn();
+      if (doomed.length >= store.project.scenes.length) { toast('Нельзя удалить все сцены проекта', true); return; }
+      if (!(await confirmModal('Удалить папку и сцены', `Будут удалены ${doomed.length} сцен(ы) папки «${folder.name}». Ссылки на них станут битыми (покажет «✓ Проверка»). Продолжить?`))) return;
+      store.snapshot();
+      const ids = new Set(doomed.map((s) => s.id));
+      store.project.scenes = store.project.scenes.filter((s) => !ids.has(s.id));
+      store.project.sceneFolders = folders().filter((f) => f.id !== folder.id);
+      if (store.project.startSceneId && ids.has(store.project.startSceneId)) {
+        store.project.startSceneId = store.project.scenes[0]?.id ?? null;
+      }
+      if (store.currentSceneId && ids.has(store.currentSceneId)) {
+        store.currentSceneId = store.project.scenes[0]?.id ?? null;
+      }
+      store.emit('change');
+      store.emit('selection');
+    }, true);
   }
 
   // ---------- диалоги ----------

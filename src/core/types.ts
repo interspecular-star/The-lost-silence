@@ -119,10 +119,17 @@ export interface Guide {
   pos: number;
 }
 
+/** Папка сцен в сайдбаре редактора («Глава 0», «Глава 1»…) — на игру не влияет */
+export interface SceneFolder {
+  id: string;
+  name: string;
+}
+
 export interface Scene {
   id: string;
   name: string;
   kind: SceneKind;
+  folderId?: string;       // папка в сайдбаре редактора (см. SceneFolder)
   background: string;      // css-цвет или градиент
   bgImage?: string;
   bg?: SceneBackgroundAdjust;
@@ -597,6 +604,7 @@ export interface Project {
   startSceneId: string | null;
   variables: VariableDef[];
   scenes: Scene[];
+  sceneFolders?: SceneFolder[];   // папки сайдбара (главы); порядок = порядок в списке
   dialogues: Dialogue[];
   idleRules?: IdleRule[];
   factions?: Faction[];
