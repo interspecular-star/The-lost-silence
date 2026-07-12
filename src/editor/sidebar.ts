@@ -28,7 +28,13 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     localStorage.setItem(COLLAPSE_FOLDERS_KEY, JSON.stringify([...collapsedFolders]));
   };
 
+  let renderedMode: string | null = null;
   const render = () => {
+    // перерисовка не должна сбрасывать прокрутку — иначе выбор внизу длинного
+    // списка «прыгает» наверх и приходится скроллить заново
+    const sameMode = renderedMode === store.mode;
+    const scrolls = sameMode ? [...root.querySelectorAll('.sb-section')].map((el) => el.scrollTop) : [];
+    renderedMode = store.mode;
     root.innerHTML = '';
     if (store.mode === 'scene') renderScenes();
     else if (store.mode === 'dialogue') renderDialogues();
@@ -37,6 +43,9 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     else if (store.mode === 'mobs') renderMobsInfo();
     else if (store.mode === 'quests') renderQuestsInfo();
     else renderVariablesInfo();
+    [...root.querySelectorAll('.sb-section')].forEach((el, i) => {
+      if (scrolls[i]) el.scrollTop = scrolls[i];
+    });
   };
 
   function renderQuestsInfo() {
@@ -303,24 +312,7 @@ export function mountSidebar(root: HTMLElement, store: Store) {
   }
 
   function showSceneMenu(scene: Scene, anchor: HTMLElement) {
-    document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
-    const rect = anchor.getBoundingClientRect();
-    const menu = h('div', {
-      class: 'ctx-menu',
-      style: `position:fixed;left:${rect.left}px;top:${rect.bottom + 4}px;z-index:250;
-        background:var(--bg-panel2);border:1px solid var(--border-light);border-radius:7px;
-        padding:4px;min-width:190px;box-shadow:0 10px 40px rgba(0,0,0,.5);`,
-    });
-    const mkItem = (label: string, fn: () => void, danger = false) => {
-      const it = h('div', {
-        style: `padding:6px 12px;cursor:pointer;border-radius:5px;font-size:12.5px;${danger ? 'color:var(--danger);' : ''}`,
-        text: label,
-      });
-      it.onmouseenter = () => { it.style.background = 'var(--bg-panel)'; };
-      it.onmouseleave = () => { it.style.background = ''; };
-      it.onclick = () => { menu.remove(); fn(); };
-      menu.appendChild(it);
-    };
+    const { mkItem } = ctxMenu(anchor);
 
     mkItem('✎ Переименовать', async () => {
       const name = await promptModal('Новое название', scene.name);
@@ -360,12 +352,6 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       store.emit('change');
       store.emit('selection');
     }, true);
-
-    document.body.appendChild(menu);
-    const close = (e: MouseEvent) => {
-      if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close); }
-    };
-    setTimeout(() => document.addEventListener('mousedown', close), 0);
   }
 
   // ---------- меню папок ----------
@@ -389,6 +375,17 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       menu.appendChild(it);
     };
     document.body.appendChild(menu);
+    // пункты добавляются сразу после вызова — клэмпим кадром позже, когда меню
+    // уже имеет размер: у длинных списков меню уходило за нижнюю границу окна
+    requestAnimationFrame(() => {
+      const mr = menu.getBoundingClientRect();
+      if (mr.bottom > window.innerHeight - 8) {
+        menu.style.top = `${Math.max(8, Math.min(rect.top, window.innerHeight - 8) - mr.height - 4)}px`;
+      }
+      if (mr.right > window.innerWidth - 8) {
+        menu.style.left = `${Math.max(8, window.innerWidth - mr.width - 8)}px`;
+      }
+    });
     const close = (e: MouseEvent) => {
       if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close); }
     };
@@ -492,63 +489,260 @@ export function mountSidebar(root: HTMLElement, store: Store) {
   }
 
   // ---------- диалоги ----------
-  function renderDialogues() {
-    const list = h('div', { class: 'sb-section', style: 'flex:1;overflow-y:auto;' });
-    const header = h('div', { class: 'sb-header' });
-    header.appendChild(h('span', { text: 'Диалоги' }));
-    const add = h('button', { class: 'sb-add', text: '+', title: 'Добавить диалог' });
-    add.onclick = async () => {
+  const dlgFolders = (): SceneFolder[] => store.project.dialogueFolders ?? [];
+  const dlgFolderOf = (d: Dialogue): SceneFolder | undefined =>
+    d.folderId ? dlgFolders().find((f) => f.id === d.folderId) : undefined;
+
+  function newDialogue(folderId?: string) {
+    return async () => {
       const name = await promptModal('Название диалога', '', 'Например: Разговор с Матисом в ангаре');
       if (!name) return;
       store.snapshot();
       const startId = uid('nd');
       const dlg: Dialogue = {
-        id: uid('dlg'), name, startNodeId: startId,
+        id: uid('dlg'), name, ...(folderId ? { folderId } : {}), startNodeId: startId,
         nodes: [{ id: startId, type: 'line', x: 120, y: 120, speaker: '', text: '', next: null }],
       };
       store.project.dialogues.push(dlg);
       store.emit('change');
       store.selectDialogue(dlg.id);
     };
+  }
+
+  function renderDialogues() {
+    const list = h('div', { class: 'sb-section', style: 'flex:1;overflow-y:auto;' });
+
+    // папки диалогов
+    for (const folder of dlgFolders()) {
+      const inFolder = store.project.dialogues.filter((d) => d.folderId === folder.id);
+      const collapsed = collapsedFolders.has(folder.id);
+      const header = h('div', { class: 'sb-header' });
+      const titleWrap = h('div', { class: 'sb-header-title' });
+      titleWrap.appendChild(h('span', { class: 'sb-collapse-arrow', text: collapsed ? '▸' : '▾' }));
+      titleWrap.appendChild(h('span', { text: `📁 ${folder.name} (${inFolder.length})` }));
+      titleWrap.onclick = () => {
+        if (collapsed) collapsedFolders.delete(folder.id); else collapsedFolders.add(folder.id);
+        saveCollapsedFolders();
+        render();
+      };
+      header.appendChild(titleWrap);
+      const menuBtn = h('button', { class: 'sb-menu-btn', text: '⋯', title: 'Действия с папкой' });
+      menuBtn.onclick = (e) => { e.stopPropagation(); showDialogueFolderMenu(folder, menuBtn); };
+      header.appendChild(menuBtn);
+      const add = h('button', { class: 'sb-add', text: '+', title: 'Новый диалог в папке' });
+      add.onclick = (e) => { e.stopPropagation(); newDialogue(folder.id)(); };
+      header.appendChild(add);
+      list.appendChild(header);
+      if (!collapsed) {
+        for (const dlg of inFolder) list.appendChild(dialogueItem(dlg, true));
+        if (inFolder.length === 0) {
+          list.appendChild(h('div', { class: 'hint', style: 'padding:2px 12px 6px 26px;', text: 'Пусто. Добавьте диалог кнопкой «+» или перенесите через меню ⋯' }));
+        }
+      }
+    }
+
+    // новая папка
+    const addFolderRow = h('div', { class: 'sb-item', style: 'color:var(--text-dim);font-size:12px;' });
+    addFolderRow.appendChild(h('span', { class: 'sb-icon', text: '+' }));
+    addFolderRow.appendChild(h('span', { class: 'sb-name', text: '📁 Новая папка (глава)' }));
+    addFolderRow.onclick = async () => {
+      const name = await promptModal('Название папки', '', 'Например: Глава 1 — диалоги');
+      if (!name) return;
+      store.snapshot();
+      store.project.dialogueFolders = [...dlgFolders(), { id: uid('fld'), name }];
+      store.emit('change');
+    };
+    list.appendChild(addFolderRow);
+
+    // диалоги без папки
+    const loose = store.project.dialogues.filter((d) => !dlgFolderOf(d));
+    const header = h('div', { class: 'sb-header' });
+    header.appendChild(h('span', { text: `Диалоги (${loose.length})` }));
+    const add = h('button', { class: 'sb-add', text: '+', title: 'Добавить диалог' });
+    add.onclick = () => newDialogue()();
     header.appendChild(add);
     list.appendChild(header);
-
-    for (const dlg of store.project.dialogues) {
-      const item = h('div', { class: `sb-item${store.currentDialogueId === dlg.id ? ' active' : ''}` });
-      item.appendChild(h('span', { class: 'sb-icon', text: '💬' }));
-      item.appendChild(h('span', { class: 'sb-name', text: dlg.name }));
-      item.appendChild(h('span', { class: 'sb-kind-badge', text: `${dlg.nodes.length} нод` }));
-      const menu = h('button', { class: 'sb-menu-btn', text: '⋯' });
-      menu.onclick = (e) => { e.stopPropagation(); showDialogueMenu(dlg, menu); };
-      item.appendChild(menu);
-      item.onclick = () => store.selectDialogue(dlg.id);
-      list.appendChild(item);
-    }
+    for (const dlg of loose) list.appendChild(dialogueItem(dlg));
     if (store.project.dialogues.length === 0) {
       list.appendChild(h('div', { class: 'hint', style: 'padding:6px 12px;', text: 'Нажмите «+», чтобы создать первый диалог.' }));
     }
     root.appendChild(list);
   }
 
-  function showDialogueMenu(dlg: Dialogue, anchor: HTMLElement) {
-    document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
-    const rect = anchor.getBoundingClientRect();
-    const menu = h('div', {
-      class: 'ctx-menu',
-      style: `position:fixed;left:${rect.left}px;top:${rect.bottom + 4}px;z-index:250;
-        background:var(--bg-panel2);border:1px solid var(--border-light);border-radius:7px;
-        padding:4px;min-width:190px;box-shadow:0 10px 40px rgba(0,0,0,.5);`,
+  function dialogueItem(dlg: Dialogue, inFolder = false): HTMLElement {
+    const item = h('div', {
+      class: `sb-item${store.currentDialogueId === dlg.id ? ' active' : ''}`,
+      'data-dialogue-id': dlg.id,
+      ...(inFolder ? { style: 'padding-left:18px;' } : {}),
     });
-    const mkItem = (label: string, fn: () => void, danger = false) => {
-      const it = h('div', {
-        style: `padding:6px 12px;cursor:pointer;border-radius:5px;font-size:12.5px;${danger ? 'color:var(--danger);' : ''}`,
-        text: label,
-      });
-      it.onmouseenter = () => { it.style.background = 'var(--bg-panel)'; };
-      it.onmouseleave = () => { it.style.background = ''; };
-      it.onclick = () => { menu.remove(); fn(); };
-      menu.appendChild(it);
+    const handle = h('span', { class: 'sb-drag-handle', text: '⠿', title: 'Перетащить для изменения порядка' });
+    handle.onpointerdown = (e) => startDialogueDrag(dlg, e);
+    item.appendChild(handle);
+    item.appendChild(h('span', { class: 'sb-icon', text: '💬' }));
+    item.appendChild(h('span', { class: 'sb-name', text: dlg.name }));
+    item.appendChild(h('span', { class: 'sb-kind-badge', text: `${dlg.nodes.length} нод` }));
+    const menu = h('button', { class: 'sb-menu-btn', text: '⋯' });
+    menu.onclick = (e) => { e.stopPropagation(); showDialogueMenu(dlg, menu); };
+    item.appendChild(menu);
+    item.onclick = () => store.selectDialogue(dlg.id);
+    return item;
+  }
+
+  function startDialogueDrag(dlg: Dialogue, e: PointerEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragging = false;
+    let ghost: HTMLElement | null = null;
+
+    const clearDropMarks = () => {
+      root.querySelectorAll('.sb-item.drop-before, .sb-item.drop-after')
+        .forEach((n) => n.classList.remove('drop-before', 'drop-after'));
     };
+    const findTarget = (ev: PointerEvent) => {
+      const el = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.sb-item[data-dialogue-id]') as HTMLElement | null;
+      if (!el || el.dataset.dialogueId === dlg.id) return null;
+      const target = store.project.dialogues.find((d) => d.id === el.dataset.dialogueId);
+      if (!target) return null;
+      const sameFolder = dlg.folderId && target.folderId === dlg.folderId;
+      const bothLoose = !dlgFolderOf(dlg) && !dlgFolderOf(target);
+      if (!sameFolder && !bothLoose) return null;
+      return { el, target };
+    };
+
+    const move = (ev: PointerEvent) => {
+      if (!dragging && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 6) return;
+      if (!dragging) {
+        dragging = true;
+        ghost = h('div', { class: 'sb-drag-ghost', text: dlg.name });
+        document.body.appendChild(ghost);
+      }
+      ghost!.style.left = `${ev.clientX + 14}px`;
+      ghost!.style.top = `${ev.clientY}px`;
+      clearDropMarks();
+      const found = findTarget(ev);
+      if (found) {
+        const rect = found.el.getBoundingClientRect();
+        const after = ev.clientY > rect.top + rect.height / 2;
+        found.el.classList.add(after ? 'drop-after' : 'drop-before');
+      }
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      clearDropMarks();
+      ghost?.remove();
+      if (!dragging) return;
+      const found = findTarget(ev);
+      if (!found) return;
+      const rect = found.el.getBoundingClientRect();
+      const after = ev.clientY > rect.top + rect.height / 2;
+      store.snapshot();
+      const arr = store.project.dialogues;
+      arr.splice(arr.indexOf(dlg), 1);
+      let to = arr.indexOf(found.target);
+      if (after) to += 1;
+      arr.splice(to, 0, dlg);
+      store.emit('change');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  function showMoveDialogueToFolderMenu(dlg: Dialogue, anchor: HTMLElement) {
+    const { mkItem } = ctxMenu(anchor);
+    if (dlgFolderOf(dlg)) {
+      mkItem('— без папки —', () => {
+        store.snapshot();
+        dlg.folderId = undefined;
+        store.emit('change');
+      });
+    }
+    for (const f of dlgFolders()) {
+      if (f.id === dlg.folderId) continue;
+      mkItem(`📁 ${f.name}`, () => {
+        store.snapshot();
+        dlg.folderId = f.id;
+        store.emit('change');
+      });
+    }
+    mkItem('+ новая папка…', async () => {
+      const name = await promptModal('Название папки', '', 'Например: Глава 1 — диалоги');
+      if (!name) return;
+      store.snapshot();
+      const f: SceneFolder = { id: uid('fld'), name };
+      store.project.dialogueFolders = [...dlgFolders(), f];
+      dlg.folderId = f.id;
+      store.emit('change');
+    });
+  }
+
+  function showDialogueFolderMenu(folder: SceneFolder, anchor: HTMLElement) {
+    const { mkItem } = ctxMenu(anchor);
+    const inFolder = () => store.project.dialogues.filter((d) => d.folderId === folder.id);
+
+    mkItem('✎ Переименовать', async () => {
+      const name = await promptModal('Новое название папки', folder.name);
+      if (!name) return;
+      store.snapshot();
+      folder.name = name;
+      store.emit('change');
+    });
+    mkItem('⧉ Дублировать (с диалогами)', () => {
+      store.snapshot();
+      const copyFolder: SceneFolder = { id: uid('fld'), name: folder.name + ' (копия)' };
+      store.project.dialogueFolders = [...dlgFolders(), copyFolder];
+      for (const d of inFolder()) {
+        const copy = duplicateDialogueData(d);
+        copy.folderId = copyFolder.id;
+        store.project.dialogues.push(copy);
+      }
+      store.emit('change');
+      toast('Папка диалогов продублирована. Переходы-«jump» в копиях ведут в исходные сцены.');
+    });
+    mkItem('▣ Расформировать (диалоги наружу)', async () => {
+      if (!(await confirmModal('Расформировать папку', `Диалоги останутся, папка «${folder.name}» исчезнет. Продолжить?`))) return;
+      store.snapshot();
+      for (const d of inFolder()) d.folderId = undefined;
+      store.project.dialogueFolders = dlgFolders().filter((f) => f.id !== folder.id);
+      store.emit('change');
+    });
+    mkItem('🗑 Удалить вместе с диалогами', async () => {
+      const doomed = inFolder();
+      if (!(await confirmModal('Удалить папку и диалоги', `Будут удалены ${doomed.length} диалог(ов) папки «${folder.name}». Ссылки на них станут битыми (покажет «✓ Проверка»). Продолжить?`))) return;
+      store.snapshot();
+      const ids = new Set(doomed.map((d) => d.id));
+      store.project.dialogues = store.project.dialogues.filter((d) => !ids.has(d.id));
+      store.project.dialogueFolders = dlgFolders().filter((f) => f.id !== folder.id);
+      if (store.currentDialogueId && ids.has(store.currentDialogueId)) {
+        store.currentDialogueId = store.project.dialogues[0]?.id ?? null;
+      }
+      store.emit('change');
+      store.emit('selection');
+    }, true);
+  }
+
+  /** Копия диалога с ремапом id нод (общая для дублирования диалога и папки) */
+  function duplicateDialogueData(dlg: Dialogue): Dialogue {
+    const copy = deepClone(dlg);
+    copy.id = uid('dlg');
+    copy.name = dlg.name + ' (копия)';
+    const map = new Map<string, string>();
+    copy.nodes.forEach((n) => { const nid = uid('nd'); map.set(n.id, nid); n.id = nid; });
+    const remap = (v: string | null | undefined) => (v ? map.get(v) ?? null : v ?? null);
+    copy.startNodeId = remap(copy.startNodeId);
+    copy.nodes.forEach((n) => {
+      n.next = remap(n.next);
+      n.nextTrue = remap(n.nextTrue);
+      n.nextFalse = remap(n.nextFalse);
+      n.choices?.forEach((c) => { c.next = remap(c.next); });
+    });
+    return copy;
+  }
+
+  function showDialogueMenu(dlg: Dialogue, anchor: HTMLElement) {
+    const { mkItem } = ctxMenu(anchor);
     mkItem('✎ Переименовать', async () => {
       const name = await promptModal('Новое название', dlg.name);
       if (!name) return;
@@ -559,24 +753,12 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     mkItem('📝 Черновик', () => { openDraftPanel(store, dlg.id); });
     mkItem('⧉ Дублировать', () => {
       store.snapshot();
-      const copy = deepClone(dlg);
-      copy.id = uid('dlg');
-      copy.name = dlg.name + ' (копия)';
-      // переименовываем id нод с сохранением связей
-      const map = new Map<string, string>();
-      copy.nodes.forEach((n) => { const nid = uid('nd'); map.set(n.id, nid); n.id = nid; });
-      const remap = (v: string | null | undefined) => (v ? map.get(v) ?? null : v ?? null);
-      copy.startNodeId = remap(copy.startNodeId);
-      copy.nodes.forEach((n) => {
-        n.next = remap(n.next);
-        n.nextTrue = remap(n.nextTrue);
-        n.nextFalse = remap(n.nextFalse);
-        n.choices?.forEach((c) => { c.next = remap(c.next); });
-      });
+      const copy = duplicateDialogueData(dlg);
       store.project.dialogues.push(copy);
       store.emit('change');
       store.selectDialogue(copy.id);
     });
+    mkItem('📁 В папку…', () => showMoveDialogueToFolderMenu(dlg, anchor));
     mkItem('🗑 Удалить', async () => {
       if (!(await confirmModal('Удалить диалог', `Диалог «${dlg.name}» будет удалён. Продолжить?`))) return;
       store.snapshot();
@@ -587,12 +769,6 @@ export function mountSidebar(root: HTMLElement, store: Store) {
       store.emit('change');
       store.emit('selection');
     }, true);
-
-    document.body.appendChild(menu);
-    const close = (e: MouseEvent) => {
-      if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close); }
-    };
-    setTimeout(() => document.addEventListener('mousedown', close), 0);
   }
 
   // ---------- режим переменных ----------

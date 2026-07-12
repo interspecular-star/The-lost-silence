@@ -86,6 +86,11 @@ export class StageView {
       bar.appendChild(b);
     }
 
+    // шаблоны элементов: сохранённые размеры/стиль/действие — вставка в один клик
+    const tplBtn = h('button', { class: 'tb-btn', text: '★ Шаблоны', title: 'Вставить сохранённый шаблон элемента' });
+    tplBtn.onclick = () => this.showTemplatesMenu(tplBtn);
+    bar.appendChild(tplBtn);
+
     bar.appendChild(h('div', { class: 'tb-spacer' }));
 
     const zoomOut = h('button', { class: 'tb-btn', text: '−', title: 'Уменьшить масштаб' });
@@ -97,6 +102,69 @@ export class StageView {
     fit.onclick = () => { this.zoomToFit(); };
     bar.append(zoomOut, this.zoomLabel, zoomIn, fit);
     this.root.appendChild(bar);
+  }
+
+  /** Меню «★ Шаблоны»: вставка сохранённого элемента (клик) и удаление шаблона (✕) */
+  private showTemplatesMenu(anchor: HTMLElement) {
+    document.querySelectorAll('.ctx-menu').forEach((m) => m.remove());
+    const rect = anchor.getBoundingClientRect();
+    const menu = h('div', {
+      class: 'ctx-menu',
+      style: `position:fixed;left:${rect.left}px;top:${rect.bottom + 4}px;z-index:250;
+        background:var(--bg-panel2);border:1px solid var(--border-light);border-radius:7px;
+        padding:4px;min-width:230px;box-shadow:0 10px 40px rgba(0,0,0,.5);`,
+    });
+    const templates = this.store.project.elementTemplates ?? [];
+    if (templates.length === 0) {
+      menu.appendChild(h('div', {
+        class: 'hint', style: 'padding:8px 12px;max-width:250px;',
+        text: 'Шаблонов пока нет. Настройте элемент и нажмите «★ Сохранить как шаблон» в инспекторе — размеры, стиль и действие запомнятся.',
+      }));
+    }
+    for (const tpl of templates) {
+      const row = h('div', {
+        style: 'display:flex;align-items:center;gap:8px;padding:6px 12px;cursor:pointer;border-radius:5px;font-size:12.5px;',
+      });
+      row.appendChild(h('span', { style: 'flex:1;', text: `★ ${tpl.name}` }));
+      row.appendChild(h('span', { style: 'color:var(--text-faint);font-size:10.5px;', text: ELEMENT_TYPE_LABELS[tpl.element.type] }));
+      const del = h('button', { class: 'del', text: '✕', title: 'Удалить шаблон' });
+      del.onclick = (e) => {
+        e.stopPropagation();
+        this.store.snapshot();
+        this.store.project.elementTemplates = templates.filter((t) => t.id !== tpl.id);
+        this.store.emit('change');
+        menu.remove();
+      };
+      row.appendChild(del);
+      row.onmouseenter = () => { row.style.background = 'var(--bg-panel)'; };
+      row.onmouseleave = () => { row.style.background = ''; };
+      row.onclick = () => { menu.remove(); this.insertTemplate(tpl.id); };
+      menu.appendChild(row);
+    }
+    document.body.appendChild(menu);
+    requestAnimationFrame(() => {
+      const mr = menu.getBoundingClientRect();
+      if (mr.bottom > window.innerHeight - 8) menu.style.top = `${Math.max(8, rect.top - mr.height - 4)}px`;
+      if (mr.right > window.innerWidth - 8) menu.style.left = `${Math.max(8, window.innerWidth - mr.width - 8)}px`;
+    });
+    const close = (e: MouseEvent) => {
+      if (!menu.contains(e.target as Node)) { menu.remove(); document.removeEventListener('mousedown', close); }
+    };
+    setTimeout(() => document.addEventListener('mousedown', close), 0);
+  }
+
+  private insertTemplate(tplId: string) {
+    const scene = this.store.currentScene;
+    const tpl = (this.store.project.elementTemplates ?? []).find((t) => t.id === tplId);
+    if (!scene || !tpl) return;
+    this.store.snapshot();
+    const el: SceneElement = JSON.parse(JSON.stringify(tpl.element));
+    el.id = uid('el');
+    el.x = Math.round((CANVAS_W - el.w) / 2);
+    el.y = Math.round((CANVAS_H - el.h) / 2);
+    scene.elements.push(el);
+    this.store.emit('change');
+    this.store.selectElements([el.id]);
   }
 
   // ---------- построение сцены ----------

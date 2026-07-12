@@ -18,7 +18,7 @@ import { colorField, backgroundField } from './colorui';
 import { richTextArea } from './richtext';
 import {
   h, row, field, section, textInput, numberInput, textArea,
-  selectInput, checkbox, toast, pickImageFile, rangeInput,
+  selectInput, checkbox, toast, pickImageFile, rangeInput, promptModal,
 } from './ui';
 
 export function mountInspector(root: HTMLElement, store: Store) {
@@ -804,6 +804,18 @@ export function mountInspector(root: HTMLElement, store: Store) {
       scene.elements.push(copy);
       store.selectedElementIds = [copy.id];
     });
+    // шаблон: запоминает тип/размеры/стиль/действие — вставка через «★ Шаблоны» над холстом
+    const tplBtn = h('button', { class: 'btn block', text: '★ Сохранить как шаблон…' });
+    tplBtn.onclick = async () => {
+      const name = await promptModal('Название шаблона', el.name, 'Например: Тихая строка-действие');
+      if (!name) return;
+      mutate(() => {
+        const tpl = JSON.parse(JSON.stringify(el)) as SceneElement;
+        store.project.elementTemplates = [...(store.project.elementTemplates ?? []),
+          { id: uid('tpl'), name, element: tpl }];
+      });
+      toast(`★ Шаблон «${name}» сохранён — кнопка «★ Шаблоны» над холстом`);
+    };
     const upBtn = h('button', { class: 'btn small', text: '▲ Выше' });
     const downBtn = h('button', { class: 'btn small', text: '▼ Ниже' });
     upBtn.onclick = () => mutate(() => { el.zIndex = (el.zIndex ?? 0) + 1; });
@@ -815,7 +827,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
       scene.elements = scene.elements.filter((x) => x.id !== el.id);
       store.selectedElementIds = [];
     });
-    ops.append(dupBtn, zRow, delBtn);
+    ops.append(dupBtn, tplBtn, zRow, delBtn);
     root.appendChild(ops);
   }
 

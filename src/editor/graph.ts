@@ -36,8 +36,19 @@ export class GraphView {
     this.buildGraph();
 
     store.on('change', () => this.render());
-    store.on('selection', () => this.render());
+    // выделение НЕ пересобирает граф: пересборка в момент pointerdown отрывала
+    // таскаемую ноду от DOM — перетаскивание шло «рывками» с телепортом в конце
+    store.on('selection', () => this.applySelection());
     store.on('view', () => this.render());
+  }
+
+  /** Лёгкое обновление выделения: только CSS-классы, без пересборки DOM */
+  private applySelection() {
+    if (this.store.mode !== 'dialogue') return;
+    const sel = this.store.selectedNodeId;
+    this.canvas.querySelectorAll('.gnode').forEach((n) => {
+      n.classList.toggle('selected', (n as HTMLElement).dataset.id === sel);
+    });
   }
 
   onShow() {
@@ -258,6 +269,7 @@ export class GraphView {
       const startP = this.toLogical(e.clientX, e.clientY);
       const ox = node.x; const oy = node.y;
       let moved = false;
+      let raf = 0;
       const move = (ev: PointerEvent) => {
         const p = this.toLogical(ev.clientX, ev.clientY);
         if (!moved && Math.abs(p.x - startP.x) < 3 && Math.abs(p.y - startP.y) < 3) return;
@@ -266,11 +278,18 @@ export class GraphView {
         node.y = Math.round(oy + (p.y - startP.y));
         d.style.left = `${node.x}px`;
         d.style.top = `${node.y}px`;
-        this.drawEdges(this.store.currentDialogue!);
+        // связи — не чаще кадра: полная перерисовка SVG на каждый mousemove дёргала граф
+        if (!raf) {
+          raf = requestAnimationFrame(() => {
+            raf = 0;
+            if (this.store.currentDialogue) this.drawEdges(this.store.currentDialogue);
+          });
+        }
       };
       const up = () => {
         window.removeEventListener('pointermove', move);
         window.removeEventListener('pointerup', up);
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
         if (moved) store.emit('change');
       };
       window.addEventListener('pointermove', move);

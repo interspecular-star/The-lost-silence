@@ -119,10 +119,17 @@ export interface Guide {
   pos: number;
 }
 
-/** Папка сцен в сайдбаре редактора («Глава 0», «Глава 1»…) — на игру не влияет */
+/** Папка сцен/диалогов в сайдбаре редактора («Глава 0», «Глава 1»…) — на игру не влияет */
 export interface SceneFolder {
   id: string;
   name: string;
+}
+
+/** Шаблон элемента сцены: сохранённые размеры/стиль/действие — «не выставлять с нуля» */
+export interface ElementTemplate {
+  id: string;
+  name: string;
+  element: SceneElement;   // эталон; при вставке получает новый id и позицию по центру
 }
 
 export interface Scene {
@@ -280,6 +287,7 @@ export interface DialogueNode {
 export interface Dialogue {
   id: string;
   name: string;
+  folderId?: string;            // папка в сайдбаре редактора (project.dialogueFolders)
   startNodeId: string | null;
   nodes: DialogueNode[];
   materialId?: string;          // материал всего диалога («допрос», «сон»…)
@@ -604,7 +612,9 @@ export interface Project {
   startSceneId: string | null;
   variables: VariableDef[];
   scenes: Scene[];
-  sceneFolders?: SceneFolder[];   // папки сайдбара (главы); порядок = порядок в списке
+  sceneFolders?: SceneFolder[];    // папки сцен в сайдбаре (главы); порядок = порядок в списке
+  dialogueFolders?: SceneFolder[]; // папки диалогов в сайдбаре
+  elementTemplates?: ElementTemplate[]; // шаблоны элементов («★ Шаблоны» над холстом)
   dialogues: Dialogue[];
   idleRules?: IdleRule[];
   factions?: Faction[];
