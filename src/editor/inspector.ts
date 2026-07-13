@@ -458,10 +458,20 @@ export function mountInspector(root: HTMLElement, store: Store) {
 
     // ---- вид всей карты при условиях (слой Осколка) ----
     sec.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Вид всей карты при условиях (первый активный; узловые настройки сильнее):' }));
-    (cfg.nodeLookIf ?? []).forEach((li) => {
+    if ((cfg.nodeLookIf ?? []).length) {
+      // что показывает холст: базовый вид или один из условных (иначе красоту негде увидеть)
+      if (store.mapLookPreviewId && !(cfg.nodeLookIf ?? []).some((x) => x.id === store.mapLookPreviewId)) {
+        store.mapLookPreviewId = null;
+      }
+      sec.appendChild(row('Холст показывает', selectInput(store.mapLookPreviewId ?? '', [
+        ['', 'базовый вид'],
+        ...(cfg.nodeLookIf ?? []).map((li, i) => [li.id, li.name || `вид при условиях №${i + 1}`] as [string, string]),
+      ], (v) => { store.mapLookPreviewId = v || null; store.emit('change'); })));
+    }
+    (cfg.nodeLookIf ?? []).forEach((li, i) => {
       const card = h('div', { class: 'cond-card' });
       const head = h('div', { class: 'row' });
-      head.appendChild(h('span', { style: 'flex:1;font-size:11px;color:var(--text-dim);', text: 'условия → вид' }));
+      head.appendChild(textInput(li.name ?? `вид при условиях №${i + 1}`, (v) => mutate(() => { li.name = v || undefined; })));
       const del = h('button', { class: 'del', text: '✕' });
       del.onclick = () => mutate(() => { cfg.nodeLookIf = (cfg.nodeLookIf ?? []).filter((x) => x.id !== li.id); });
       head.appendChild(del);
@@ -687,12 +697,17 @@ export function mountInspector(root: HTMLElement, store: Store) {
         fx: { surface: 'spatial', glass: 10, border: 'shimmer', tempo: 'slow', intensity: 'quiet' },
       };
       if (wake) { wake.conditions = awake; wake.look = wakeLook; }
-      else cfg.nodeLookIf = [...(cfg.nodeLookIf ?? []), { id: 'ml_oskolok_wake', conditions: awake, look: wakeLook }];
+      else {
+        cfg.nodeLookIf = [...(cfg.nodeLookIf ?? []),
+          { id: 'ml_oskolok_wake', name: 'Пробуждение (Осколок)', conditions: awake, look: wakeLook }];
+      }
       // связи: видны только «проснувшись», с бегущим потоком
-      cfg.linkLook = { ...(cfg.linkLook ?? {}), flow: 'run', opacity: 16, tempo: 'slow' };
+      cfg.linkLook = { ...(cfg.linkLook ?? {}), flow: 'run', opacity: 28, tempo: 'slow' };
       for (const l of cfg.links ?? []) l.visibleIf = awake.map((c) => ({ ...c }));
     });
-    toast('Слой Осколка применён — правьте поля как обычно');
+    store.mapLookPreviewId = 'ml_oskolok_wake'; // холст сразу показывает «пробуждение»
+    store.emit('change');
+    toast('Слой Осколка применён — холст показывает «пробуждение»');
   }
 
   // ================= ЗОНА АНОМАЛИИ (C7) =================

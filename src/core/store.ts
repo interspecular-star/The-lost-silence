@@ -31,6 +31,9 @@ export class Store {
   selectedNodeId: string | null = null;
   /** Узел карты лагеря, выбранный на холсте (правится в инспекторе) */
   selectedMapNodeId: string | null = null;
+  /** Какой «вид при условиях» показывает холст карты (id из cfg.nodeLookIf; null — базовый).
+   *  Только для редактора, в проект не сохраняется. */
+  mapLookPreviewId: string | null = null;
 
   // настройки вида
   snapEnabled = true;

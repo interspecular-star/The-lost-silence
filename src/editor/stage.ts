@@ -12,7 +12,7 @@ import { h } from './ui';
 import { renderRichInto, splitRichParagraphs } from '../runtime/textfx';
 import { applyBoxFx, glassBg } from '../runtime/boxfx';
 import { applyTextGuard } from '../runtime/elementfx';
-import { renderDiamond, renderLinksSvg, baseNodeLook, ensureCampMapStyles } from '../runtime/campmap';
+import { renderDiamond, renderLinksSvg, previewNodeLook, ensureCampMapStyles } from '../runtime/campmap';
 
 const RULER = 24;
 const SNAP_SCREEN_PX = 7;
@@ -406,6 +406,7 @@ export class StageView {
       const svg = renderLinksSvg(cfg, pos, links, {
         animate: false,
         interactive: true,
+        minOpacity: 45, // рабочий инструмент: связи не должны теряться на фоне-фото
         onLineClick: (link) => {
           this.store.snapshot();
           cfg.links = (cfg.links ?? []).filter((l) => l !== link);
@@ -419,7 +420,7 @@ export class StageView {
       const size = node.size ?? 14;
       const hgt = size * 1.6;
       const dia = renderDiamond({
-        look: baseNodeLook(cfg, node),
+        look: previewNodeLook(cfg, node, this.store.mapLookPreviewId),
         marker: cfg.marker,
         state: node.id === selId ? 'selected' : node.id === cfg.homeNodeId ? 'current' : 'normal',
         dimK: Math.max(0.25, 1 - (node.dim ?? 0) / 100),

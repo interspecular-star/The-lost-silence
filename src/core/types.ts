@@ -203,6 +203,7 @@ export interface CampNodeLook {
 /** Вид узла при условиях («слой Осколка»: oskolok/mesh_on и любые другие переменные) */
 export interface CampNodeLookIf {
   id: string;
+  name?: string;           // подпись для редактора («Пробуждение (Осколок)»)
   conditions: Condition[];
   look: CampNodeLook;
 }

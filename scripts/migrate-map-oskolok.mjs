@@ -56,12 +56,18 @@ const wakeLook = {
   fx: { surface: 'spatial', glass: 10, border: 'shimmer', tempo: 'slow', intensity: 'quiet' },
 };
 const wake = (cfg.nodeLookIf ?? []).find((li) => li.id === 'ml_oskolok_wake');
-if (wake) { wake.conditions = awake(); wake.look = wakeLook; log.push('= слой «пробуждение» обновлён'); }
+if (wake) {
+  wake.name = wake.name ?? 'Пробуждение (Осколок)';
+  wake.conditions = awake();
+  wake.look = wakeLook;
+  log.push('= слой «пробуждение» обновлён');
+}
 else {
-  cfg.nodeLookIf = [...(cfg.nodeLookIf ?? []), { id: 'ml_oskolok_wake', conditions: awake(), look: wakeLook }];
+  cfg.nodeLookIf = [...(cfg.nodeLookIf ?? []),
+    { id: 'ml_oskolok_wake', name: 'Пробуждение (Осколок)', conditions: awake(), look: wakeLook }];
   log.push('+ вид карты: «бумага» → «пробуждение» (oskolok≥1 и mesh_on)');
 }
-cfg.linkLook = { ...(cfg.linkLook ?? {}), flow: 'run', opacity: 16, tempo: 'slow' };
+cfg.linkLook = { ...(cfg.linkLook ?? {}), flow: 'run', opacity: 28, tempo: 'slow' };
 
 // ---------- связи (по названиям узлов; дальше владелец рисует мышью) ----------
 const byTitle = (t) => cfg.nodes.find((n) => n.title === t);
@@ -105,6 +111,23 @@ if (gate) {
     });
     log.push('+ «секрет тишины»: пометка-помеха на «Выходе за периметр» видна только при mesh_off (черновик)');
   }
+}
+
+// ---------- чекпоинт предпросмотра: увидеть «пробуждение» одной кнопкой ----------
+const vDone = p.variables.find((v) => v.name === 'pro_done');
+if (!(p.playtests ?? []).some((c) => c.id === 'cp_oskolok_map')) {
+  (p.playtests = p.playtests ?? []).push({
+    id: 'cp_oskolok_map',
+    name: 'Карта — Осколок ур.1 (пробуждение)',
+    sceneId: sMap.id,
+    vars: {
+      [vOsk.id]: 1,
+      [vMesh.id]: true,
+      ...(vDone ? { [vDone.id]: true } : {}),
+    },
+    inv: [], equip: {}, claims: {}, ups: {}, qsteps: {},
+  });
+  log.push('+ чекпоинт предпросмотра «Карта — Осколок ур.1 (пробуждение)»');
 }
 
 // ---------- запись ----------

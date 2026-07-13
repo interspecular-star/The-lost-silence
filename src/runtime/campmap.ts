@@ -49,6 +49,16 @@ export function baseNodeLook(cfg: CampMapConfig, node: CampMapNode): CampNodeLoo
   return mergeLook(mergeLook(legacy, cfg.nodeLook), node.look);
 }
 
+/** Вид узла для холста редактора с выбранным «видом при условиях» карты
+ *  (порядок как в игре: дефолт карты → lookIf карты → узел) */
+export function previewNodeLook(cfg: CampMapConfig, node: CampMapNode, lookIfId: string | null): CampNodeLook {
+  const li = lookIfId ? (cfg.nodeLookIf ?? []).find((x) => x.id === lookIfId) : undefined;
+  if (!li) return baseNodeLook(cfg, node);
+  const legacy: CampNodeLook = cfg.marker?.ringOpacity !== undefined
+    ? { borderOpacity: cfg.marker.ringOpacity } : {};
+  return mergeLook(mergeLook(mergeLook(legacy, cfg.nodeLook), li.look), node.look);
+}
+
 /** Индекс первого активного lookIf в списке (-1 — нет) */
 function activeLookIdx(eng: Engine, list?: { conditions: Condition[] }[]): number {
   for (let i = 0; i < (list?.length ?? 0); i++) {
@@ -251,6 +261,7 @@ export interface LinkDrawOpts {
   animate?: boolean;                       // false — холст редактора
   interactive?: boolean;                   // true — линии ловят клики (редактор)
   onLineClick?: (link: CampMapLink) => void;
+  minOpacity?: number;                     // холст редактора: не даём линиям потеряться на фоне
 }
 
 /** SVG-слой пунктиров между центрами узлов; координаты — % → логические px холста */
@@ -277,11 +288,13 @@ export function renderLinksSvg(
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', String(x1)); line.setAttribute('y1', String(y1));
     line.setAttribute('x2', String(x2)); line.setAttribute('y2', String(y2));
-    line.setAttribute('stroke', `color-mix(in srgb, ${l.color} ${Math.max(0, Math.min(100, l.opacity))}%, transparent)`);
+    line.setAttribute('stroke', `color-mix(in srgb, ${l.color} ${Math.max(opts.minOpacity ?? 0, Math.min(100, l.opacity))}%, transparent)`);
     line.setAttribute('stroke-width', String(l.width));
     line.setAttribute('vector-effect', 'non-scaling-stroke');
-    const gap = l.dash > 0 ? l.dash * 2.25 : 0;
-    if (l.dash > 0) line.setAttribute('stroke-dasharray', `${l.dash} ${gap}`);
+    // на холсте редактора (minOpacity задан) пунктир плотнее — при зуме <100% штрихи 4px вырождаются в точки
+    const dashLen = opts.minOpacity ? Math.max(l.dash, 8) : l.dash;
+    const gap = dashLen > 0 ? dashLen * (opts.minOpacity ? 1.4 : 2.25) : 0;
+    if (dashLen > 0) line.setAttribute('stroke-dasharray', `${dashLen} ${gap}`);
     if (opts.animate !== false && l.flow === 'run' && l.dash > 0) {
       line.classList.add('cmap-linkrun');
       line.style.setProperty('--cyc', `${-(l.dash + gap)}`);
