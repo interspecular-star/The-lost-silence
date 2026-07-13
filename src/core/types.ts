@@ -179,10 +179,54 @@ export interface CampMapNode {
   lockedText?: string;       // строка сайдбара, когда заперто
   visibleIf?: Condition[];   // условия видимости узла
   side?: 'left' | 'right';   // с какой стороны выезжает сайдбар этого узла (по умолчанию справа)
+  look?: CampNodeLook;       // вид этого узла (переопределяет дефолт карты)
+  lookIf?: CampNodeLookIf[]; // вид при условиях (первый активный — поверх)
 }
 
-/** Устарело: дорожки-пунктиры убраны из игры (решение владельца, 2026-07-13); поле читается только для совместимости старых файлов */
-export interface CampMapLink { a: string; b: string; }
+/** Вид большого ромба-узла. Уровни: дефолт карты (nodeLook) → узел (look) →
+ *  lookIf по условиям (первый активный накладывается поверх, поля-переопределения). */
+export interface CampNodeLook {
+  fill?: string;           // цвет заливки ромба (по умолчанию #ffffff)
+  fillOpacity?: number;    // 0–100 (по умолчанию 5)
+  border?: string;         // цвет рамки (по умолчанию #ffffff)
+  borderOpacity?: number;  // 0–100 (по умолчанию 22; читает и устаревший marker.ringOpacity)
+  borderWidth?: number;    // толщина рамки, px логического холста (по умолчанию 1)
+  fx?: BoxStyle;           // «материал» ромба: glass/анимация рамки/tempo/intensity/accent (рамка — SVG по контуру ромба)
+  showMarker?: boolean;    // ромбик-точка (по умолчанию true)
+  showTitle?: boolean;     // подпись (по умолчанию true)
+  showMark?: boolean;      // активная пометка (по умолчанию true)
+  scrim?: number;          // тёмная подложка под подписью 0–100 (по умолчанию 50)
+  markerColor?: string;    // переопределить цвет маркера-точки (слой Осколка: бумага/пробуждение)
+  markerGlow?: number;     // переопределить свечение маркера 0–100
+}
+
+/** Вид узла при условиях («слой Осколка»: oskolok/mesh_on и любые другие переменные) */
+export interface CampNodeLookIf {
+  id: string;
+  conditions: Condition[];
+  look: CampNodeLook;
+}
+
+export type CampLinkFlow = 'none' | 'run' | 'dot';
+
+/** Вид пунктира-связи; дефолт карты (linkLook) переопределяется полями link.look */
+export interface CampLinkLook {
+  color?: string;    // по умолчанию #ffffff
+  opacity?: number;  // 0–100 (по умолчанию 14)
+  width?: number;    // толщина, px (по умолчанию 1.5)
+  dash?: number;     // длина штриха пунктира, px (по умолчанию 4; 0 — сплошная линия)
+  flow?: CampLinkFlow; // поток: бегущий пунктир / бегущая точка (по умолчанию none)
+  tempo?: BoxTempo;  // темп потока
+}
+
+/** Связь между узлами (вернулись 2026-07-13: выбор связей за владельцем, количество не ограничено) */
+export interface CampMapLink {
+  id?: string;             // у старых связей нет — редактор/рантайм терпят
+  a: string;
+  b: string;
+  visibleIf?: Condition[]; // условия видимости (слой Осколка)
+  look?: CampLinkLook;
+}
 
 /** Вид маркеров-точек входа на карте (настройки владельца; по умолчанию — как в прототипе) */
 export interface CampMapMarkerStyle {
@@ -190,7 +234,8 @@ export interface CampMapMarkerStyle {
   color?: string;       // цвет маркера (по умолчанию #4fd1c5)
   glow?: number;        // сила свечения 0–100 (0 — без свечения; по умолчанию 60)
   pulse?: 'current' | 'all' | 'none'; // пульсация: текущая локация (по умолчанию) / все маркеры / нет
-  ringOpacity?: number; // заметность большого ромба-рамки 0–100 (по умолчанию 22)
+  /** Устарело: используйте nodeLook.borderOpacity; читается как его дефолт */
+  ringOpacity?: number;
 }
 
 export interface CampMapConfig {
@@ -198,6 +243,9 @@ export interface CampMapConfig {
   links?: CampMapLink[];
   homeNodeId?: string;       // «текущее положение» до первого входа куда-либо
   marker?: CampMapMarkerStyle;
+  nodeLook?: CampNodeLook;   // вид узлов по умолчанию
+  nodeLookIf?: CampNodeLookIf[]; // вид ВСЕЙ карты при условиях (слой Осколка); узловые look/lookIf сильнее
+  linkLook?: CampLinkLook;   // вид связей по умолчанию
 }
 
 // ---------- Зона аномалии: таймер экспозиции (C7, world-anomalies.md §4) ----------

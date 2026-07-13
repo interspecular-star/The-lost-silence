@@ -177,9 +177,25 @@ export function validateProject(p: Project): Issue[] {
           checkConds(m.conditions, `${whereNode}, пометка «${m.text}»`, goScene);
           checkInterp(m.text, `${whereNode}, пометка`, goScene);
         }
+        for (const li of node.lookIf ?? []) {
+          checkConds(li.conditions, `${whereNode} (условия вида)`, goScene);
+          if (!li.conditions.length) warn(whereNode, 'вид-при-условиях без условий — перекроет обычный вид всегда', goScene);
+        }
         for (const id of node.npcIds ?? []) {
           if (!npcById.has(id)) err(whereNode, 'в «кто здесь» удалённый NPC', goScene);
         }
+      }
+      const seenLinks = new Set<string>();
+      for (const link of cfg.links ?? []) {
+        if (!mapNodeIds.has(link.a) || !mapNodeIds.has(link.b)) {
+          warn(whereScene, 'связь карты ссылается на удалённый узел', goScene);
+          continue;
+        }
+        const key = [link.a, link.b].sort().join('~');
+        if (link.a === link.b) warn(whereScene, 'связь узла с самим собой', goScene);
+        else if (seenLinks.has(key)) warn(whereScene, 'дубль связи между узлами', goScene);
+        seenLinks.add(key);
+        checkConds(link.visibleIf, `${whereScene} (условия видимости связи)`, goScene);
       }
     }
 

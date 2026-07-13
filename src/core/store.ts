@@ -29,6 +29,8 @@ export class Store {
   currentDialogueId: string | null = null;
   selectedElementIds: string[] = [];
   selectedNodeId: string | null = null;
+  /** Узел карты лагеря, выбранный на холсте (правится в инспекторе) */
+  selectedMapNodeId: string | null = null;
 
   // настройки вида
   snapEnabled = true;
@@ -117,6 +119,9 @@ export class Store {
     if (this.selectedNodeId && !dlg?.nodes.some((n) => n.id === this.selectedNodeId)) {
       this.selectedNodeId = null;
     }
+    if (this.selectedMapNodeId && !scene?.campMap?.nodes.some((n) => n.id === this.selectedMapNodeId)) {
+      this.selectedMapNodeId = null;
+    }
     this.emit('change');
     this.emit('selection');
   }
@@ -159,6 +164,7 @@ export class Store {
   selectScene(id: string) {
     this.currentSceneId = id;
     this.selectedElementIds = [];
+    this.selectedMapNodeId = null;
     this.emit('selection');
     this.emit('view');
   }
@@ -172,11 +178,20 @@ export class Store {
 
   selectElements(ids: string[]) {
     this.selectedElementIds = ids;
+    if (ids.length) this.selectedMapNodeId = null; // элемент и узел карты не выделяются одновременно
     this.emit('selection');
   }
 
   selectNode(id: string | null) {
     this.selectedNodeId = id;
+    this.emit('selection');
+  }
+
+  /** Узел карты лагеря, выбранный на холсте (редактор; не путать с игровым mapSelection) */
+  selectMapNode(id: string | null) {
+    if (this.selectedMapNodeId === id) return;
+    this.selectedMapNodeId = id;
+    if (id) this.selectedElementIds = [];
     this.emit('selection');
   }
 
@@ -189,6 +204,7 @@ export class Store {
     this.currentDialogueId = p.dialogues[0]?.id ?? null;
     this.selectedElementIds = [];
     this.selectedNodeId = null;
+    this.selectedMapNodeId = null;
     this.emit('project');
     this.emit('selection');
     this.emit('view');

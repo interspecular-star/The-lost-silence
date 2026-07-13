@@ -5,13 +5,14 @@
 
 import { Store } from '../core/store';
 import {
-  Scene, SceneElement, ElementType, Guide, uid,
+  Scene, SceneElement, ElementType, Guide, uid, CampMapNode,
   CANVAS_W, CANVAS_H, ELEMENT_TYPE_LABELS,
 } from '../core/types';
 import { h } from './ui';
 import { renderRichInto, splitRichParagraphs } from '../runtime/textfx';
 import { applyBoxFx, glassBg } from '../runtime/boxfx';
 import { applyTextGuard } from '../runtime/elementfx';
+import { renderDiamond, renderLinksSvg, baseNodeLook, ensureCampMapStyles } from '../runtime/campmap';
 
 const RULER = 24;
 const SNAP_SCREEN_PX = 7;
@@ -371,8 +372,8 @@ export class StageView {
       this.canvas.appendChild(this.renderElement(el));
     }
 
-    // сцена-карта: статичный план (ромбы/дорожки), поведение — только в F5
-    if (scene.campMap?.nodes.length) this.canvas.appendChild(this.renderCampMapPreview(scene));
+    // сцена-карта: редактируемый план (выделение/drag/размер/связи), поведение — в F5
+    if (scene.campMap) this.canvas.appendChild(this.renderCampMapEditor(scene));
 
     if (this.store.gridEnabled) {
       this.canvas.appendChild(h('div', { class: 'grid-overlay' }));
@@ -388,57 +389,177 @@ export class StageView {
     }
   }
 
-  /** Статичный план карты лагеря на холсте: те же ромбы/маркеры/подписи, без интерактива */
-  private renderCampMapPreview(scene: Scene): HTMLElement {
+  /** Редактируемый план карты лагеря на холсте: выделение узла (карточка в инспекторе),
+   *  drag — позиция, ручка ◢ — размер, порт ● — связь, клик по линии — удалить связь.
+   *  Вид — базовый look узлов (условия lookIf живут в предпросмотре/игре). */
+  private renderCampMapEditor(scene: Scene): HTMLElement {
+    ensureCampMapStyles();
     const cfg = scene.campMap!;
-    const wrap = h('div', { style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;pointer-events:none;` });
-    // вид маркеров — те же настройки, что в игре (живой предпросмотр правок инспектора)
-    const mk = cfg.marker ?? {};
-    const mkSize = mk.size ?? 11;
-    const mkColor = mk.color ?? '#4fd1c5';
-    const mkGlow = Math.max(0, Math.min(100, mk.glow ?? 60));
-    const ringA = Math.max(0, Math.min(100, mk.ringOpacity ?? 22)) / 100;
+    // font-size 26px = базовый em карты в логических px холста (рендер общий с игрой)
+    const wrap = h('div', { style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;pointer-events:none;font-size:26px;` });
+    const selId = this.store.selectedMapNodeId;
+
+    // связи: статично + клик по линии удаляет
+    const links = cfg.links ?? [];
+    if (links.length) {
+      const pos = new Map(cfg.nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
+      const svg = renderLinksSvg(cfg, pos, links, {
+        animate: false,
+        interactive: true,
+        onLineClick: (link) => {
+          this.store.snapshot();
+          cfg.links = (cfg.links ?? []).filter((l) => l !== link);
+          this.store.emit('change');
+        },
+      });
+      wrap.appendChild(svg);
+    }
+
     for (const node of cfg.nodes) {
       const size = node.size ?? 14;
       const hgt = size * 1.6;
-      const dimK = Math.max(0.25, 1 - (node.dim ?? 0) / 100);
-      const isHome = node.id === cfg.homeNodeId;
-      const dia = h('div', {
-        style: `position:absolute;left:${((node.x - size / 2) / 100) * CANVAS_W}px;top:${((node.y - hgt / 2) / 100) * CANVAS_H}px;
-          width:${(size / 100) * CANVAS_W}px;height:${(hgt / 100) * CANVAS_H}px;
-          clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);opacity:${dimK};
-          background:${isHome ? `radial-gradient(circle at 50% 50%, color-mix(in srgb, ${mkColor} 16%, transparent), transparent 70%)` : 'rgba(255,255,255,0.05)'};
-          border:1px solid ${isHome ? `color-mix(in srgb, ${mkColor} 45%, transparent)` : `rgba(255,255,255,${ringA.toFixed(3)})`};`,
+      const dia = renderDiamond({
+        look: baseNodeLook(cfg, node),
+        marker: cfg.marker,
+        state: node.id === selId ? 'selected' : node.id === cfg.homeNodeId ? 'current' : 'normal',
+        dimK: Math.max(0.25, 1 - (node.dim ?? 0) / 100),
+        title: node.title,
+        markText: node.marks?.[0]?.text ?? '',
+        titlePx: Math.round(6 + size * 0.95), // логическая сетка холста = игровая
+        animate: false,
       });
+      dia.style.left = `${node.x - size / 2}%`;
+      dia.style.top = `${node.y - hgt / 2}%`;
+      dia.style.width = `${size}%`;
+      dia.style.height = `${hgt}%`;
+      const hit = dia.querySelector<HTMLElement>('.cmap-hit')!;
+      hit.dataset.mapNodeId = node.id;
+      hit.addEventListener('pointerdown', (e) => this.mapNodePointerDown(node, e));
       wrap.appendChild(dia);
-      const titlePx = Math.round(6 + size * 0.95); // как в игре: логическая сетка холста = игровая
-      const label = h('div', {
-        style: `position:absolute;left:${((node.x - size / 2) / 100) * CANVAS_W}px;top:${(node.y / 100) * CANVAS_H}px;
-          width:${(size / 100) * CANVAS_W}px;transform:translateY(-50%);text-align:center;opacity:${dimK};
-          padding:12px 8px;
-          background:radial-gradient(ellipse 110% 100% at 50% 50%, rgba(4,10,15,0.5), rgba(4,10,15,0) 72%);`,
-      });
-      label.appendChild(h('div', {
-        style: `width:${mkSize}px;height:${mkSize}px;margin:0 auto 9px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
-          background:${mkColor};${mkGlow > 0 ? `filter:drop-shadow(0 0 ${(mkGlow / 10).toFixed(1)}px color-mix(in srgb, ${mkColor} ${Math.min(100, mkGlow + 25)}%, transparent));` : ''}`,
-      }));
-      label.appendChild(h('div', {
-        style: `font-size:${titlePx}px;font-weight:300;letter-spacing:0.11em;color:#eef4f8;text-transform:uppercase;
-          text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.75);`,
-        text: node.title,
-      }));
-      const firstMark = node.marks?.[0]?.text;
-      if (firstMark) {
-        label.appendChild(h('div', {
-          style: `font-size:${Math.max(9, titlePx - 6)}px;margin-top:4px;letter-spacing:0.05em;
-            color:${firstMark.startsWith('◊') ? '#4fd1c5' : '#8fa7b5'};
-            text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.75);`,
-          text: firstMark,
-        }));
+
+      if (node.id === selId) {
+        // ручка размера — правая вершина ромба
+        const grip = h('div', {
+          title: 'Размер',
+          style: `position:absolute;left:${node.x + size / 2}%;top:${node.y}%;width:12px;height:12px;
+            transform:translate(-50%,-50%);background:#4fd1c5;border:1px solid #062a26;border-radius:2px;
+            cursor:ew-resize;pointer-events:auto;z-index:3;`,
+        });
+        grip.addEventListener('pointerdown', (e) => this.mapNodeResize(node, e));
+        wrap.appendChild(grip);
+        // порт связи — нижняя вершина
+        const port = h('div', {
+          title: 'Тяните до другого узла, чтобы связать',
+          style: `position:absolute;left:${node.x}%;top:${node.y + hgt / 2}%;width:14px;height:14px;
+            transform:translate(-50%,-50%);background:#0d1b22;border:2px solid #4fd1c5;border-radius:50%;
+            cursor:crosshair;pointer-events:auto;z-index:3;`,
+        });
+        port.addEventListener('pointerdown', (e) => this.mapLinkDrag(node, e, wrap));
+        wrap.appendChild(port);
       }
-      wrap.appendChild(label);
     }
+
+    wrap.appendChild(h('div', {
+      text: 'Карта: клик — выделить узел · drag — двигать · ◢ — размер · ● — связь · клик по линии — удалить связь',
+      style: `position:absolute;left:50%;bottom:6px;transform:translateX(-50%);font-size:11px;
+        color:rgba(230,237,243,0.45);background:rgba(8,19,26,0.6);padding:3px 10px;border-radius:6px;
+        pointer-events:none;white-space:nowrap;`,
+    }));
     return wrap;
+  }
+
+  private mapNodePointerDown(node: CampMapNode, e: PointerEvent) {
+    if (e.button !== 0 || this.spaceDown) return; // панорама/прочие кнопки — мимо
+    e.stopPropagation();
+    this.store.selectMapNode(node.id);
+    const startP = this.toLogical(e.clientX, e.clientY);
+    const orig = { x: node.x, y: node.y };
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const p = this.toLogical(ev.clientX, ev.clientY);
+      const dx = ((p.x - startP.x) / CANVAS_W) * 100;
+      const dy = ((p.y - startP.y) / CANVAS_H) * 100;
+      if (!moved && Math.abs(dx) < 0.15 && Math.abs(dy) < 0.15) return;
+      if (!moved) { this.store.snapshot(); moved = true; }
+      node.x = Math.round(Math.max(0, Math.min(100, orig.x + dx)) * 10) / 10;
+      node.y = Math.round(Math.max(0, Math.min(100, orig.y + dy)) * 10) / 10;
+      this.renderCanvas();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (moved) this.store.emit('change');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  private mapNodeResize(node: CampMapNode, e: PointerEvent) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const startP = this.toLogical(e.clientX, e.clientY);
+    const orig = node.size ?? 14;
+    let moved = false;
+    const move = (ev: PointerEvent) => {
+      const p = this.toLogical(ev.clientX, ev.clientY);
+      const d = ((p.x - startP.x) / CANVAS_W) * 100 * 2; // тянем за правую вершину — размер растёт вдвое быстрее
+      if (!moved && Math.abs(d) < 0.2) return;
+      if (!moved) { this.store.snapshot(); moved = true; }
+      node.size = Math.round(Math.max(3, Math.min(40, orig + d)) * 10) / 10;
+      this.renderCanvas();
+    };
+    const up = () => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      if (moved) this.store.emit('change');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+  }
+
+  private mapLinkDrag(from: CampMapNode, e: PointerEvent, layer: HTMLElement) {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    const scene = this.store.currentScene!;
+    const cfg = scene.campMap!;
+    // временная линия от узла к курсору
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${CANVAS_W} ${CANVAS_H}`);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:4;';
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    const x1 = (from.x / 100) * CANVAS_W, y1 = (from.y / 100) * CANVAS_H;
+    line.setAttribute('x1', String(x1)); line.setAttribute('y1', String(y1));
+    line.setAttribute('x2', String(x1)); line.setAttribute('y2', String(y1));
+    line.setAttribute('stroke', '#4fd1c5');
+    line.setAttribute('stroke-width', '1.5');
+    line.setAttribute('stroke-dasharray', '5 6');
+    line.setAttribute('vector-effect', 'non-scaling-stroke');
+    svg.appendChild(line);
+    layer.appendChild(svg);
+
+    const move = (ev: PointerEvent) => {
+      const p = this.toLogical(ev.clientX, ev.clientY);
+      line.setAttribute('x2', String(p.x));
+      line.setAttribute('y2', String(p.y));
+    };
+    const up = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      svg.remove();
+      const targetHit = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)
+        ?.closest<HTMLElement>('.cmap-hit');
+      const targetId = targetHit?.dataset.mapNodeId;
+      if (!targetId || targetId === from.id) return;
+      const key = [from.id, targetId].sort().join('~');
+      const exists = (cfg.links ?? []).some((l) => [l.a, l.b].sort().join('~') === key);
+      if (exists) return;
+      this.store.snapshot();
+      cfg.links = [...(cfg.links ?? []), { id: uid('ml'), a: from.id, b: targetId }];
+      this.store.emit('change');
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
   }
 
   private renderElement(el: SceneElement): HTMLElement {
@@ -646,6 +767,7 @@ export class StageView {
 
     if (!target) {
       this.store.selectElements([]);
+      this.store.selectMapNode(null);
       return;
     }
 
