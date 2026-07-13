@@ -181,11 +181,6 @@ export function validateProject(p: Project): Issue[] {
           if (!npcById.has(id)) err(whereNode, 'в «кто здесь» удалённый NPC', goScene);
         }
       }
-      for (const link of cfg.links) {
-        if (!mapNodeIds.has(link.a) || !mapNodeIds.has(link.b)) {
-          warn(whereScene, 'дорожка карты ссылается на удалённый узел', goScene);
-        }
-      }
     }
 
     // зона аномалии: аварийные выходы

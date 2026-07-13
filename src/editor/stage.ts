@@ -388,30 +388,10 @@ export class StageView {
     }
   }
 
-  /** Статичный план карты лагеря на холсте: те же ромбы/подписи/дорожки, без интерактива */
+  /** Статичный план карты лагеря на холсте: те же ромбы/маркеры/подписи, без интерактива */
   private renderCampMapPreview(scene: Scene): HTMLElement {
     const cfg = scene.campMap!;
     const wrap = h('div', { style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;pointer-events:none;` });
-    const byId = new Map(cfg.nodes.map((n) => [n.id, n]));
-    if (cfg.links.length) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', `0 0 ${CANVAS_W} ${CANVAS_H}`);
-      svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;';
-      for (const link of cfg.links) {
-        const a = byId.get(link.a), b = byId.get(link.b);
-        if (!a || !b) continue;
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', String((a.x / 100) * CANVAS_W));
-        line.setAttribute('y1', String((a.y / 100) * CANVAS_H));
-        line.setAttribute('x2', String((b.x / 100) * CANVAS_W));
-        line.setAttribute('y2', String((b.y / 100) * CANVAS_H));
-        line.setAttribute('stroke', 'rgba(255,255,255,0.14)');
-        line.setAttribute('stroke-width', '1.5');
-        line.setAttribute('stroke-dasharray', '4 9');
-        svg.appendChild(line);
-      }
-      wrap.appendChild(svg);
-    }
     for (const node of cfg.nodes) {
       const size = node.size ?? 14;
       const hgt = size * 1.6;
@@ -421,24 +401,32 @@ export class StageView {
         style: `position:absolute;left:${((node.x - size / 2) / 100) * CANVAS_W}px;top:${((node.y - hgt / 2) / 100) * CANVAS_H}px;
           width:${(size / 100) * CANVAS_W}px;height:${(hgt / 100) * CANVAS_H}px;
           clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);opacity:${dimK};
-          background:${isHome ? 'radial-gradient(circle at 50% 50%, rgba(79,209,197,0.16), rgba(79,209,197,0.02) 70%)' : 'rgba(255,255,255,0.035)'};
-          border:1px solid ${isHome ? 'rgba(79,209,197,0.4)' : 'rgba(255,255,255,0.14)'};`,
+          background:${isHome ? 'radial-gradient(circle at 50% 50%, rgba(79,209,197,0.16), rgba(79,209,197,0.02) 70%)' : 'rgba(255,255,255,0.05)'};
+          border:1px solid ${isHome ? 'rgba(79,209,197,0.45)' : 'rgba(255,255,255,0.22)'};`,
       });
       wrap.appendChild(dia);
       const titlePx = Math.round(6 + size * 0.95); // как в игре: логическая сетка холста = игровая
       const label = h('div', {
         style: `position:absolute;left:${((node.x - size / 2) / 100) * CANVAS_W}px;top:${(node.y / 100) * CANVAS_H}px;
-          width:${(size / 100) * CANVAS_W}px;transform:translateY(-50%);text-align:center;opacity:${dimK};`,
+          width:${(size / 100) * CANVAS_W}px;transform:translateY(-50%);text-align:center;opacity:${dimK};
+          padding:12px 8px;
+          background:radial-gradient(ellipse 110% 100% at 50% 50%, rgba(4,10,15,0.5), rgba(4,10,15,0) 72%);`,
       });
       label.appendChild(h('div', {
-        style: `font-size:${titlePx}px;font-weight:300;letter-spacing:0.11em;color:#e6edf3;text-transform:uppercase;`,
+        style: `width:11px;height:11px;margin:0 auto 9px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
+          background:rgba(79,209,197,0.95);filter:drop-shadow(0 0 6px rgba(79,209,197,0.8));`,
+      }));
+      label.appendChild(h('div', {
+        style: `font-size:${titlePx}px;font-weight:300;letter-spacing:0.11em;color:#eef4f8;text-transform:uppercase;
+          text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.75);`,
         text: node.title,
       }));
       const firstMark = node.marks?.[0]?.text;
       if (firstMark) {
         label.appendChild(h('div', {
           style: `font-size:${Math.max(9, titlePx - 6)}px;margin-top:4px;letter-spacing:0.05em;
-            color:${firstMark.startsWith('◊') ? '#4fd1c5' : '#5f7a8a'};`,
+            color:${firstMark.startsWith('◊') ? '#4fd1c5' : '#8fa7b5'};
+            text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.75);`,
           text: firstMark,
         }));
       }

@@ -178,14 +178,15 @@ export interface CampMapNode {
   lockedIf?: Condition[];    // все истинны → узел заперт (вместо «Войти» — lockedText)
   lockedText?: string;       // строка сайдбара, когда заперто
   visibleIf?: Condition[];   // условия видимости узла
+  side?: 'left' | 'right';   // с какой стороны выезжает сайдбар этого узла (по умолчанию справа)
 }
 
-/** Пунктирная дорожка между двумя узлами */
+/** Устарело: дорожки-пунктиры убраны из игры (решение владельца, 2026-07-13); поле читается только для совместимости старых файлов */
 export interface CampMapLink { a: string; b: string; }
 
 export interface CampMapConfig {
   nodes: CampMapNode[];
-  links: CampMapLink[];
+  links?: CampMapLink[];
   homeNodeId?: string;       // «текущее положение» до первого входа куда-либо
 }
 

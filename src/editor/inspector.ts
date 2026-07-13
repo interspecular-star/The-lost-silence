@@ -358,11 +358,11 @@ export function mountInspector(root: HTMLElement, store: Store) {
   function campMapSection(scene: Scene): HTMLElement {
     const sec = section('Карта лагеря');
     sec.appendChild(checkbox(!!scene.campMap, (v) => mutate(() => {
-      scene.campMap = v ? (scene.campMap ?? { nodes: [], links: [] }) : undefined;
+      scene.campMap = v ? (scene.campMap ?? { nodes: [] }) : undefined;
     }), 'эта сцена — карта (план с ромбами-локациями)'));
     const cfg = scene.campMap;
     if (!cfg) {
-      sec.appendChild(h('div', { class: 'hint', text: 'План лагеря по прототипу: ромбы-локации, дорожки, сайдбар «кто здесь» и кнопка ВОЙТИ. Обычные элементы сцены (заголовок, нарратив) рисуются под картой.' }));
+      sec.appendChild(h('div', { class: 'hint', text: 'План лагеря по прототипу: ромбы-локации с маркерами, сайдбар «кто здесь» и кнопка ВОЙТИ. Обычные элементы сцены (заголовок, нарратив) рисуются под картой.' }));
       return sec;
     }
 
@@ -383,7 +383,6 @@ export function mountInspector(root: HTMLElement, store: Store) {
       const del = h('button', { class: 'del', text: '✕', title: 'Удалить узел' });
       del.onclick = () => mutate(() => {
         cfg.nodes = cfg.nodes.filter((n) => n.id !== node.id);
-        cfg.links = cfg.links.filter((l) => l.a !== node.id && l.b !== node.id);
         if (cfg.homeNodeId === node.id) cfg.homeNodeId = undefined;
       });
       head.appendChild(del);
@@ -404,6 +403,8 @@ export function mountInspector(root: HTMLElement, store: Store) {
       sz.appendChild(numberInput(node.dim ?? 0, (v) => mutate(() => { node.dim = Math.max(0, Math.min(100, v)) || undefined; })));
       card.appendChild(sz);
       card.appendChild(row('Примета', textInput(node.tagline ?? '', (v) => mutate(() => { node.tagline = v || undefined; }))));
+      card.appendChild(row('Сайдбар', selectInput(node.side ?? 'right', [['right', 'выезжает справа'], ['left', 'выезжает слева']],
+        (v) => mutate(() => { node.side = v === 'left' ? 'left' : undefined; }))));
 
       // живые пометки
       card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Живые пометки (◊ — акцент; на карте видна первая активная):' }));
@@ -470,24 +471,6 @@ export function mountInspector(root: HTMLElement, store: Store) {
     });
     sec.appendChild(addNode);
 
-    // ---- дорожки ----
-    if (cfg.nodes.length >= 2) {
-      sec.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:8px;', text: 'Дорожки (пунктир между узлами):' }));
-      cfg.links.forEach((link, i) => {
-        const lr = h('div', { class: 'row' });
-        lr.appendChild(selectInput(link.a, nodeOptions(), (v) => mutate(() => { link.a = v; })));
-        lr.appendChild(selectInput(link.b, nodeOptions(), (v) => mutate(() => { link.b = v; })));
-        const ldel = h('button', { class: 'del', text: '✕' });
-        ldel.onclick = () => mutate(() => { cfg.links = cfg.links.filter((_, j) => j !== i); });
-        lr.appendChild(ldel);
-        sec.appendChild(lr);
-      });
-      const addLink = h('button', { class: 'btn small', text: '+ дорожка' });
-      addLink.onclick = () => mutate(() => {
-        cfg.links.push({ a: cfg.nodes[0].id, b: cfg.nodes[1]?.id ?? cfg.nodes[0].id });
-      });
-      sec.appendChild(addLink);
-    }
     sec.appendChild(h('div', { class: 'hint', text: 'В игре: клик по ромбу — сайдбар с приметой и «кто здесь», кнопка ВОЙТИ (или повторный клик по ромбу) — переход в сцену. Пометки и замки живут по условиям. Холст показывает план статично; поведение — в предпросмотре (F5).' }));
     return sec;
   }

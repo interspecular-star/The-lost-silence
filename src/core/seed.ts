@@ -677,7 +677,6 @@ export function seedProject(): Project {
             marks: [{ id: uid('mm'), text: '◊ Матис ждёт', conditions: [{ varId: vOskolok, op: 'eq', value: 0 }] }],
           },
         ],
-        links: [{ a: mnYard, b: mnHangar }],
       },
     },
 

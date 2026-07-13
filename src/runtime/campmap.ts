@@ -1,9 +1,11 @@
 // ============================================================
 // Карта лагеря (блок I) — spatial-навигация аванпоста.
-// План-аксонометрия: ромбы-локации, пунктирные дорожки, живые
-// пометки по условиям; сайдбар «кто здесь» + ВОЙТИ.
+// План-аксонометрия: ромбы-локации с маркерами-точками доступа,
+// живые пометки по условиям; сайдбар «кто здесь» + ВОЙТИ
+// (сторона выезда — настройка узла, план при этом не сдвигается).
 // Дизайн: docs/design/Аванпост Флакс-Номадов - прототип.html,
-// решения владельца: гибрид — «Войти» ведёт в обычную сцену.
+// решения владельца: гибрид — «Войти» ведёт в обычную сцену;
+// дорожки-пунктиры убраны (2026-07-13).
 // ============================================================
 
 import { Scene, CampMapNode, CANVAS_W, CANVAS_H } from '../core/types';
@@ -58,36 +60,12 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
     root.innerHTML = '';
     const selected = eng.mapSelection && nodeById.has(eng.mapSelection) ? eng.mapSelection : null;
 
-    // ---------- план ----------
+    // ---------- план (статичен: сайдбар накрывает его, не сдвигая) ----------
     const plane = document.createElement('div');
     plane.className = 'cmap-plane';
-    plane.style.cssText = `position:absolute;inset:0;transition:transform .55s cubic-bezier(.2,.7,.2,1);
-      transform:${selected ? 'translateX(-16%)' : 'none'};`;
+    plane.style.cssText = 'position:absolute;inset:0;';
     plane.onclick = () => { if (eng.mapSelection) { eng.mapSelection = null; rebuild(); } };
     root.appendChild(plane);
-
-    // дорожки
-    if (cfg.links.length) {
-      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      svg.setAttribute('viewBox', `0 0 ${CANVAS_W} ${CANVAS_H}`);
-      svg.setAttribute('preserveAspectRatio', 'none');
-      svg.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;pointer-events:none;';
-      for (const link of cfg.links) {
-        const a = nodeById.get(link.a), b = nodeById.get(link.b);
-        if (!a || !b) continue;
-        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
-        line.setAttribute('x1', String((a.x / 100) * CANVAS_W));
-        line.setAttribute('y1', String((a.y / 100) * CANVAS_H));
-        line.setAttribute('x2', String((b.x / 100) * CANVAS_W));
-        line.setAttribute('y2', String((b.y / 100) * CANVAS_H));
-        line.setAttribute('stroke', 'rgba(255,255,255,0.12)');
-        line.setAttribute('stroke-width', '1.5');
-        line.setAttribute('stroke-dasharray', '4 9');
-        line.setAttribute('vector-effect', 'non-scaling-stroke');
-        svg.appendChild(line);
-      }
-      plane.appendChild(svg);
-    }
 
     // узлы
     for (const node of visibleNodes) {
@@ -99,13 +77,13 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
       const dimK = Math.max(0.25, 1 - (node.dim ?? 0) / 100);
 
       const dia = document.createElement('div');
-      dia.className = 'cmap-node' + (isCurrent ? ' cmap-cur' : '');
+      dia.className = 'cmap-node';
       const ring = isSel ? 'rgba(79,209,197,0.75)'
-        : isCurrent ? 'rgba(79,209,197,0.4)'
-        : `rgba(255,255,255,${(0.14 * dimK).toFixed(3)})`;
+        : isCurrent ? 'rgba(79,209,197,0.45)'
+        : `rgba(255,255,255,${(0.22 * dimK).toFixed(3)})`;
       const bg = isCurrent
         ? 'radial-gradient(circle at 50% 50%, rgba(79,209,197,0.16), rgba(79,209,197,0.02) 70%)'
-        : `rgba(255,255,255,${(0.035 * dimK).toFixed(3)})`;
+        : `rgba(255,255,255,${(0.05 * dimK).toFixed(3)})`;
       dia.style.cssText = `position:absolute;left:${node.x - size / 2}%;top:${node.y - h / 2}%;
         width:${size}%;height:${h}%;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
         background:${bg};border:1px solid ${ring};cursor:pointer;opacity:${dimK};`;
@@ -117,15 +95,26 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
       };
       plane.appendChild(dia);
 
-      // подпись (не перехватывает клики)
+      // подпись с маркером-точкой доступа (не перехватывает клики)
       const label = document.createElement('div');
       const titlePx = Math.round(6 + size * 0.95);
       label.style.cssText = `position:absolute;left:${node.x - size / 2}%;top:${node.y}%;
-        width:${size}%;transform:translateY(-50%);text-align:center;pointer-events:none;opacity:${dimK};`;
+        width:${size}%;transform:translateY(-50%);text-align:center;pointer-events:none;opacity:${dimK};
+        padding:0.5em 0.3em;
+        background:radial-gradient(ellipse 110% 100% at 50% 50%, rgba(4,10,15,0.5), rgba(4,10,15,0) 72%);`;
+      // маркер: яркий ромбик, чтобы точка доступа читалась на любом фоне-фото
+      const dot = document.createElement('div');
+      dot.className = 'cmap-dot' + (isCurrent ? ' cmap-dot-cur' : '');
+      const dotColor = locked ? 'rgba(150,170,180,0.55)' : isSel ? '#7fe8dd' : 'rgba(79,209,197,0.95)';
+      dot.style.cssText = `width:0.42em;height:0.42em;margin:0 auto 0.35em;
+        clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:${dotColor};`;
+      if (!locked) dot.style.filter = 'drop-shadow(0 0 6px rgba(79,209,197,0.8))';
+      label.appendChild(dot);
       const t = document.createElement('div');
       t.textContent = node.title;
       t.style.cssText = `font-size:${(titlePx / 26).toFixed(3)}em;font-weight:300;
-        letter-spacing:0.11em;color:#e6edf3;text-transform:uppercase;`;
+        letter-spacing:0.11em;color:#eef4f8;text-transform:uppercase;
+        text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 12px rgba(0,0,0,0.75);`;
       label.appendChild(t);
       const markText = locked ? '···заперто' : activeMark(eng, node);
       if (markText) {
@@ -133,7 +122,8 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
         m.textContent = markText;
         const quiet = locked || !markText.startsWith('◊');
         m.style.cssText = `font-size:${((titlePx - 6) / 26).toFixed(3)}em;margin-top:0.3em;
-          letter-spacing:0.05em;color:${quiet ? '#5f7a8a' : ACCENT};`;
+          letter-spacing:0.05em;color:${quiet ? '#8fa7b5' : ACCENT};
+          text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.75);`;
         label.appendChild(m);
       }
       plane.appendChild(label);
@@ -149,18 +139,20 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
       root.appendChild(foot);
     }
 
-    // ---------- сайдбар ----------
+    // ---------- сайдбар (сторона выезда — настройка узла) ----------
+    const selNode = selected ? nodeById.get(selected) : null;
+    const sbSide = selNode?.side === 'left' ? 'left' : 'right';
     const sb = document.createElement('div');
     sb.className = 'cmap-sb';
-    sb.style.cssText = `position:absolute;top:0;right:0;bottom:0;width:34%;box-sizing:border-box;
+    sb.style.cssText = `position:absolute;top:0;${sbSide}:0;bottom:0;width:34%;box-sizing:border-box;
       background:color-mix(in srgb, #08131a 90%, transparent);backdrop-filter:blur(12px);
-      border-left:1px solid rgba(255,255,255,0.10);padding:1em 1em;display:flex;flex-direction:column;
+      border-${sbSide === 'left' ? 'right' : 'left'}:1px solid rgba(255,255,255,0.10);
+      padding:1em 1em;display:flex;flex-direction:column;
       transition:transform .5s cubic-bezier(.2,.7,.2,1), opacity .3s ease;
-      transform:${selected ? 'translateX(0)' : 'translateX(100%)'};opacity:${selected ? 1 : 0};
-      pointer-events:${selected ? 'auto' : 'none'};`;
+      transform:${selected ? 'translateX(0)' : `translateX(${sbSide === 'left' ? '-100%' : '100%'})`};
+      opacity:${selected ? 1 : 0};pointer-events:${selected ? 'auto' : 'none'};`;
     root.appendChild(sb);
 
-    const selNode = selected ? nodeById.get(selected) : null;
     if (selNode) {
       const locked = isLocked(eng, selNode);
 
@@ -276,19 +268,18 @@ function ensureCampMapStyles() {
   stylesDone = true;
   const st = document.createElement('style');
   st.textContent = `
-.cmap-node { transition: filter .2s ease, border-color .25s ease; }
-.cmap-node:hover { filter: brightness(1.18); }
+.cmap-node { transition: filter .2s ease, border-color .25s ease, background .25s ease; }
+.cmap-node:hover { filter: brightness(1.3); background: rgba(79,209,197,0.07) !important; }
 .cmap-row { border-radius: 6px; }
 .cmap-enter:hover { background: rgba(79,209,197,0.16) !important; }
-@keyframes cmap-breathe {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(79,209,197,0.22)); }
-  50% { filter: drop-shadow(0 0 15px rgba(79,209,197,0.5)); }
+@keyframes cmap-dot-breathe {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(79,209,197,0.5)); transform: scale(1); }
+  50% { filter: drop-shadow(0 0 12px rgba(79,209,197,0.95)); transform: scale(1.25); }
 }
-.cmap-cur { animation: cmap-breathe 3.6s ease-in-out infinite; }
-.cmap-cur:hover { filter: brightness(1.18) drop-shadow(0 0 8px rgba(79,209,197,0.35)); }
+.cmap-dot-cur { animation: cmap-dot-breathe 3.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {
-  .cmap-cur { animation: none; }
-  .cmap-plane, .cmap-sb { transition: none !important; }
+  .cmap-dot-cur { animation: none; }
+  .cmap-sb { transition: none !important; }
 }
 `;
   document.head.appendChild(st);
