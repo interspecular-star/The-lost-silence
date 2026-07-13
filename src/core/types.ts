@@ -184,10 +184,20 @@ export interface CampMapNode {
 /** Устарело: дорожки-пунктиры убраны из игры (решение владельца, 2026-07-13); поле читается только для совместимости старых файлов */
 export interface CampMapLink { a: string; b: string; }
 
+/** Вид маркеров-точек входа на карте (настройки владельца; по умолчанию — как в прототипе) */
+export interface CampMapMarkerStyle {
+  size?: number;        // размер ромбика, px логического холста (по умолчанию 11)
+  color?: string;       // цвет маркера (по умолчанию #4fd1c5)
+  glow?: number;        // сила свечения 0–100 (0 — без свечения; по умолчанию 60)
+  pulse?: 'current' | 'all' | 'none'; // пульсация: текущая локация (по умолчанию) / все маркеры / нет
+  ringOpacity?: number; // заметность большого ромба-рамки 0–100 (по умолчанию 22)
+}
+
 export interface CampMapConfig {
   nodes: CampMapNode[];
   links?: CampMapLink[];
   homeNodeId?: string;       // «текущее положение» до первого входа куда-либо
+  marker?: CampMapMarkerStyle;
 }
 
 // ---------- Зона аномалии: таймер экспозиции (C7, world-anomalies.md §4) ----------

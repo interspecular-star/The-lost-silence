@@ -67,6 +67,14 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
     plane.onclick = () => { if (eng.mapSelection) { eng.mapSelection = null; rebuild(); } };
     root.appendChild(plane);
 
+    // вид маркеров — настройки владельца (инспектор, секция «Карта лагеря»)
+    const mk = cfg.marker ?? {};
+    const mkSize = mk.size ?? 11;                 // px логического холста; em = /26 (базовый шрифт карты)
+    const mkColor = mk.color ?? '#4fd1c5';
+    const mkGlow = Math.max(0, Math.min(100, mk.glow ?? 60));
+    const mkPulse = mk.pulse ?? 'current';
+    const ringA = Math.max(0, Math.min(100, mk.ringOpacity ?? 22)) / 100;
+
     // узлы
     for (const node of visibleNodes) {
       const size = node.size ?? 14;
@@ -78,11 +86,11 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
 
       const dia = document.createElement('div');
       dia.className = 'cmap-node';
-      const ring = isSel ? 'rgba(79,209,197,0.75)'
-        : isCurrent ? 'rgba(79,209,197,0.45)'
-        : `rgba(255,255,255,${(0.22 * dimK).toFixed(3)})`;
+      const ring = isSel ? `color-mix(in srgb, ${mkColor} 75%, transparent)`
+        : isCurrent ? `color-mix(in srgb, ${mkColor} 45%, transparent)`
+        : `rgba(255,255,255,${(ringA * dimK).toFixed(3)})`;
       const bg = isCurrent
-        ? 'radial-gradient(circle at 50% 50%, rgba(79,209,197,0.16), rgba(79,209,197,0.02) 70%)'
+        ? `radial-gradient(circle at 50% 50%, color-mix(in srgb, ${mkColor} 16%, transparent), transparent 70%)`
         : `rgba(255,255,255,${(0.05 * dimK).toFixed(3)})`;
       dia.style.cssText = `position:absolute;left:${node.x - size / 2}%;top:${node.y - h / 2}%;
         width:${size}%;height:${h}%;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
@@ -104,11 +112,14 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
         background:radial-gradient(ellipse 110% 100% at 50% 50%, rgba(4,10,15,0.5), rgba(4,10,15,0) 72%);`;
       // маркер: яркий ромбик, чтобы точка доступа читалась на любом фоне-фото
       const dot = document.createElement('div');
-      dot.className = 'cmap-dot' + (isCurrent ? ' cmap-dot-cur' : '');
-      const dotColor = locked ? 'rgba(150,170,180,0.55)' : isSel ? '#7fe8dd' : 'rgba(79,209,197,0.95)';
-      dot.style.cssText = `width:0.42em;height:0.42em;margin:0 auto 0.35em;
-        clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:${dotColor};`;
-      if (!locked) dot.style.filter = 'drop-shadow(0 0 6px rgba(79,209,197,0.8))';
+      const pulsing = !locked && (mkPulse === 'all' || (mkPulse === 'current' && isCurrent));
+      dot.className = 'cmap-dot' + (pulsing ? ' cmap-dot-cur' : '');
+      const dotColor = locked ? 'rgba(150,170,180,0.55)' : mkColor;
+      dot.style.cssText = `width:${(mkSize / 26).toFixed(3)}em;height:${(mkSize / 26).toFixed(3)}em;
+        margin:0 auto 0.35em;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);background:${dotColor};`;
+      if (!locked && mkGlow > 0) {
+        dot.style.filter = `drop-shadow(0 0 ${(mkGlow / 260).toFixed(3)}em color-mix(in srgb, ${mkColor} ${Math.min(100, mkGlow + 25)}%, transparent))`;
+      }
       label.appendChild(dot);
       const t = document.createElement('div');
       t.textContent = node.title;
@@ -273,8 +284,8 @@ function ensureCampMapStyles() {
 .cmap-row { border-radius: 6px; }
 .cmap-enter:hover { background: rgba(79,209,197,0.16) !important; }
 @keyframes cmap-dot-breathe {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(79,209,197,0.5)); transform: scale(1); }
-  50% { filter: drop-shadow(0 0 12px rgba(79,209,197,0.95)); transform: scale(1.25); }
+  0%, 100% { transform: scale(1); opacity: 0.75; }
+  50% { transform: scale(1.3); opacity: 1; }
 }
 .cmap-dot-cur { animation: cmap-dot-breathe 3.6s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) {

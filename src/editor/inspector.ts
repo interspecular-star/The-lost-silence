@@ -375,6 +375,28 @@ export function mountInspector(root: HTMLElement, store: Store) {
       (v) => mutate(() => { cfg.homeNodeId = v || undefined; }))));
     sec.appendChild(h('div', { class: 'hint', text: 'Узел «текущего положения» до первого входа куда-либо: он пульсирует, подпись внизу карты. Дальше движок запоминает, куда игрок входил.' }));
 
+    // ---- маркеры-точки входа ----
+    {
+      const mk = () => (cfg.marker ?? (cfg.marker = {}));
+      const card = h('div', { class: 'cond-card' });
+      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Маркеры-точки входа (ромбики на локациях):' }));
+      const sz = h('div', { class: 'row' });
+      sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Размер' }));
+      sz.appendChild(numberInput(cfg.marker?.size ?? 11, (v) => mutate(() => { mk().size = Math.max(4, Math.min(40, v)); })));
+      sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', title: 'Сила свечения 0–100 (0 — выключено)', text: 'Свечение' }));
+      sz.appendChild(numberInput(cfg.marker?.glow ?? 60, (v) => mutate(() => { mk().glow = Math.max(0, Math.min(100, v)); })));
+      card.appendChild(sz);
+      card.appendChild(row('Цвет', colorField(cfg.marker?.color ?? '#4fd1c5', (v) => mutate(() => { mk().color = v || undefined; }))));
+      card.appendChild(row('Пульсация', selectInput(cfg.marker?.pulse ?? 'current', [
+        ['current', 'текущая локация'], ['all', 'все маркеры'], ['none', 'выключена'],
+      ], (v) => mutate(() => { mk().pulse = v === 'current' ? undefined : (v as 'all' | 'none'); }))));
+      card.appendChild(row('Рамка-ромб', numberInput(cfg.marker?.ringOpacity ?? 22, (v) => mutate(() => {
+        mk().ringOpacity = Math.max(0, Math.min(100, v));
+      }))));
+      card.appendChild(h('div', { class: 'hint', text: 'Рамка-ромб — заметность контура локации, 0–100 (0 — только маркер и подпись). «Пульсация: все маркеры» помогает новым игрокам заметить точки входа. Холст показывает вид сразу, пульс — в предпросмотре (F5).' }));
+      sec.appendChild(card);
+    }
+
     // ---- узлы ----
     cfg.nodes.forEach((node) => {
       const card = h('div', { class: 'cond-card' });

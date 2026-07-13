@@ -392,6 +392,12 @@ export class StageView {
   private renderCampMapPreview(scene: Scene): HTMLElement {
     const cfg = scene.campMap!;
     const wrap = h('div', { style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;pointer-events:none;` });
+    // вид маркеров — те же настройки, что в игре (живой предпросмотр правок инспектора)
+    const mk = cfg.marker ?? {};
+    const mkSize = mk.size ?? 11;
+    const mkColor = mk.color ?? '#4fd1c5';
+    const mkGlow = Math.max(0, Math.min(100, mk.glow ?? 60));
+    const ringA = Math.max(0, Math.min(100, mk.ringOpacity ?? 22)) / 100;
     for (const node of cfg.nodes) {
       const size = node.size ?? 14;
       const hgt = size * 1.6;
@@ -401,8 +407,8 @@ export class StageView {
         style: `position:absolute;left:${((node.x - size / 2) / 100) * CANVAS_W}px;top:${((node.y - hgt / 2) / 100) * CANVAS_H}px;
           width:${(size / 100) * CANVAS_W}px;height:${(hgt / 100) * CANVAS_H}px;
           clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);opacity:${dimK};
-          background:${isHome ? 'radial-gradient(circle at 50% 50%, rgba(79,209,197,0.16), rgba(79,209,197,0.02) 70%)' : 'rgba(255,255,255,0.05)'};
-          border:1px solid ${isHome ? 'rgba(79,209,197,0.45)' : 'rgba(255,255,255,0.22)'};`,
+          background:${isHome ? `radial-gradient(circle at 50% 50%, color-mix(in srgb, ${mkColor} 16%, transparent), transparent 70%)` : 'rgba(255,255,255,0.05)'};
+          border:1px solid ${isHome ? `color-mix(in srgb, ${mkColor} 45%, transparent)` : `rgba(255,255,255,${ringA.toFixed(3)})`};`,
       });
       wrap.appendChild(dia);
       const titlePx = Math.round(6 + size * 0.95); // как в игре: логическая сетка холста = игровая
@@ -413,8 +419,8 @@ export class StageView {
           background:radial-gradient(ellipse 110% 100% at 50% 50%, rgba(4,10,15,0.5), rgba(4,10,15,0) 72%);`,
       });
       label.appendChild(h('div', {
-        style: `width:11px;height:11px;margin:0 auto 9px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
-          background:rgba(79,209,197,0.95);filter:drop-shadow(0 0 6px rgba(79,209,197,0.8));`,
+        style: `width:${mkSize}px;height:${mkSize}px;margin:0 auto 9px;clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%);
+          background:${mkColor};${mkGlow > 0 ? `filter:drop-shadow(0 0 ${(mkGlow / 10).toFixed(1)}px color-mix(in srgb, ${mkColor} ${Math.min(100, mkGlow + 25)}%, transparent));` : ''}`,
       }));
       label.appendChild(h('div', {
         style: `font-size:${titlePx}px;font-weight:300;letter-spacing:0.11em;color:#eef4f8;text-transform:uppercase;
