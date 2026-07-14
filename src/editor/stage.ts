@@ -394,20 +394,22 @@ export class StageView {
 
   /** Редактируемый план карты лагеря на холсте: выделение узла (карточка в инспекторе),
    *  drag — позиция, ручка ◢ — размер, порт ● — связь, клик по линии — удалить связь.
-   *  Вид — базовый look узлов (условия lookIf живут в предпросмотре/игре). */
+   *  Анимации (переливы/поток/пульс) живут прямо на холсте (чип ⏯), вид переключается
+   *  чипом «Вид: …» — настройка слоя Осколка без прыжков в предпросмотр. */
   private renderCampMapEditor(scene: Scene): HTMLElement {
     ensureCampMapStyles();
     const cfg = scene.campMap!;
+    const animate = this.store.mapAnimatePreview;
     // font-size 26px = базовый em карты в логических px холста (рендер общий с игрой)
     const wrap = h('div', { style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;pointer-events:none;font-size:26px;` });
     const selId = this.store.selectedMapNodeId;
 
-    // связи: статично + клик по линии удаляет
+    // связи: живой поток (по чипу ⏯) + клик по линии удаляет
     const links = cfg.links ?? [];
     if (links.length) {
       const pos = new Map(cfg.nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
       const svg = renderLinksSvg(cfg, pos, links, {
-        animate: false,
+        animate,
         interactive: true,
         minOpacity: 45, // рабочий инструмент: связи не должны теряться на фоне-фото
         onLineClick: (link) => {
@@ -419,18 +421,21 @@ export class StageView {
       wrap.appendChild(svg);
     }
 
+    const mkPulse = cfg.marker?.pulse ?? 'current';
     for (const node of cfg.nodes) {
       const size = node.size ?? 14;
       const hgt = size * 1.6;
+      const isHome = node.id === cfg.homeNodeId;
       const dia = renderDiamond({
         look: previewNodeLook(cfg, node, this.store.mapLookPreviewId),
         marker: cfg.marker,
-        state: node.id === selId ? 'selected' : node.id === cfg.homeNodeId ? 'current' : 'normal',
+        state: node.id === selId ? 'selected' : isHome ? 'current' : 'normal',
+        pulsing: mkPulse === 'all' || (mkPulse === 'current' && isHome),
         dimK: Math.max(0.25, 1 - (node.dim ?? 0) / 100),
         title: node.title,
         markText: node.marks?.[0]?.text ?? '',
         titlePx: Math.round(6 + size * 0.95), // логическая сетка холста = игровая
-        animate: false,
+        animate,
       });
       dia.style.left = `${node.x - size / 2}%`;
       dia.style.top = `${node.y - hgt / 2}%`;
@@ -469,6 +474,41 @@ export class StageView {
         color:rgba(230,237,243,0.45);background:rgba(8,19,26,0.6);padding:3px 10px;border-radius:6px;
         pointer-events:none;white-space:nowrap;`,
     }));
+
+    // чипы настройки прямо на холсте: вид (бумага ⇄ пробуждение ⇄ …) и анимации
+    const chipBar = h('div', {
+      style: `position:absolute;top:10px;right:10px;display:flex;gap:8px;pointer-events:auto;font-size:12px;`,
+    });
+    chipBar.addEventListener('pointerdown', (e) => e.stopPropagation());
+    const chipCss = `padding:5px 12px;background:rgba(8,19,26,0.82);border:1px solid rgba(79,209,197,0.35);
+      border-radius:14px;color:#cfe8e5;cursor:pointer;user-select:none;letter-spacing:0.4px;`;
+    const views: (string | null)[] = [null, ...(cfg.nodeLookIf ?? []).map((li) => li.id)];
+    if (views.length > 1) {
+      const cur = this.store.mapLookPreviewId;
+      const idx = Math.max(0, views.indexOf(cur));
+      const viewName = (id: string | null) => {
+        if (!id) return 'базовый вид';
+        const i = (cfg.nodeLookIf ?? []).findIndex((x) => x.id === id);
+        return (cfg.nodeLookIf ?? [])[i]?.name || `вид №${i + 1}`;
+      };
+      const viewChip = h('div', { style: chipCss, text: `Вид: ${viewName(views[idx] ?? null)} ⇄`, title: 'Переключить вид карты (бумага/Осколок…) — только на холсте, игру не меняет' });
+      viewChip.onclick = () => {
+        this.store.mapLookPreviewId = views[(idx + 1) % views.length] ?? null;
+        this.store.emit('selection'); // перерисовать холст+инспектор без автосейва
+      };
+      chipBar.appendChild(viewChip);
+    }
+    const animChip = h('div', {
+      style: chipCss + (animate ? '' : 'opacity:0.55;'),
+      text: animate ? '⏸ анимации' : '▶ анимации',
+      title: 'Переливы, поток связей и пульс прямо на холсте',
+    });
+    animChip.onclick = () => {
+      this.store.mapAnimatePreview = !this.store.mapAnimatePreview;
+      this.store.emit('selection'); // без автосейва
+    };
+    chipBar.appendChild(animChip);
+    wrap.appendChild(chipBar);
     return wrap;
   }
 

@@ -34,6 +34,8 @@ export class Store {
   /** Какой «вид при условиях» показывает холст карты (id из cfg.nodeLookIf; null — базовый).
    *  Только для редактора, в проект не сохраняется. */
   mapLookPreviewId: string | null = null;
+  /** Анимации карты (переливы/поток/пульс) прямо на холсте. Только для редактора. */
+  mapAnimatePreview = true;
 
   // настройки вида
   snapEnabled = true;

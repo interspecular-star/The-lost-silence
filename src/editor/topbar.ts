@@ -108,9 +108,16 @@ export function mountTopbar(root: HTMLElement, store: Store) {
     root.appendChild(checkBtn);
     const playBtn = h('button', { class: 'tb-btn primary', text: '▶ Играть', title: 'Предпросмотр игры (F5)' });
     playBtn.onclick = () => openPreview(store);
+    const liveBtn = h('button', {
+      class: 'tb-btn', text: '👁 Живой',
+      title: 'Живой предпросмотр в отдельном окне: правки редактора подхватываются сами (~1 сек), игра не сбрасывается. Поставьте окна рядом.',
+    });
+    liveBtn.onclick = () => {
+      window.open(`${location.pathname}?live=1`, 'tls_live', 'width=1360,height=820');
+    };
     const exportBtn = h('button', { class: 'tb-btn', text: '⤓ Экспорт игры', title: 'Собрать один HTML-файл игры' });
     exportBtn.onclick = () => openExportDialog(store);
-    root.append(playBtn, exportBtn);
+    root.append(playBtn, liveBtn, exportBtn);
   };
 
   store.on('change', render);

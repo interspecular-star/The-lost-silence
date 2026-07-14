@@ -251,6 +251,7 @@ export class Engine {
       this.questSteps = { ...(cp.qsteps ?? {}) };
       this.upgradeLevels = { ...(cp.ups ?? {}) };
       this.achievements = { ...(cp.achievements ?? {}) };
+      this.mapLoc = { ...(cp.maploc ?? {}) };
       if (cp.sceneId && this.project.scenes.some((s) => s.id === cp.sceneId)) startId = cp.sceneId;
     }
     if (this.opts.startSceneId && this.project.scenes.some((s) => s.id === this.opts.startSceneId)) {
@@ -294,6 +295,7 @@ export class Engine {
       ups: { ...this.upgradeLevels },
       qsteps: { ...this.questSteps },
       achievements: { ...this.achievements },
+      maploc: { ...this.mapLoc },
     };
   }
 

@@ -38,6 +38,13 @@ function showBanner(text: string, tone: 'warn' | 'info') {
 }
 
 async function bootstrap() {
+  // отдельное окно живого предпросмотра (?live=1): игра, следующая за правками редактора
+  if (new URLSearchParams(location.search).has('live')) {
+    const { bootLive } = await import('./live');
+    await bootLive();
+    return;
+  }
+
   const autosave = await Store.loadAutosave();
   let project = autosave.project;
   let recoveredFromDisk = false;

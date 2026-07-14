@@ -573,6 +573,7 @@ export interface PlaytestCheckpoint {
   equip?: Partial<Record<ItemSlot, string>>;
   claims?: Record<string, string>;          // забранные награды заданий
   ups?: Record<string, number>;             // уровни улучшений
+  maploc?: Record<string, string>;          // «текущее положение» на картах лагеря
   qsteps?: Record<string, number>;          // прогресс цепочек заданий (id → пройдено этапов)
   achievements?: Record<string, boolean>;   // разблокированные достижения
 }

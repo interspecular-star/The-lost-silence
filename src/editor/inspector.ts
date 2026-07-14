@@ -466,7 +466,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
       sec.appendChild(row('Холст показывает', selectInput(store.mapLookPreviewId ?? '', [
         ['', 'базовый вид'],
         ...(cfg.nodeLookIf ?? []).map((li, i) => [li.id, li.name || `вид при условиях №${i + 1}`] as [string, string]),
-      ], (v) => { store.mapLookPreviewId = v || null; store.emit('change'); })));
+      ], (v) => { store.mapLookPreviewId = v || null; store.emit('selection'); })));
     }
     (cfg.nodeLookIf ?? []).forEach((li, i) => {
       const card = h('div', { class: 'cond-card' });
