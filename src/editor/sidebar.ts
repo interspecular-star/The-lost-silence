@@ -238,6 +238,8 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     item.appendChild(h('span', { class: 'sb-icon', text: KIND_ICONS[scene.kind] }));
     const isStart = store.project.startSceneId === scene.id;
     item.appendChild(h('span', { class: 'sb-name', text: scene.name + (isStart ? ' ▶' : '') }));
+    // длинные названия обрезаются — полное во всплывающей подсказке
+    item.title = `${scene.name}${isStart ? ' (стартовая)' : ''}\n${SCENE_KIND_LABELS[scene.kind]}`;
     const menu = h('button', { class: 'sb-menu-btn', text: '⋯', title: 'Действия' });
     menu.onclick = async (e) => {
       e.stopPropagation();
@@ -581,6 +583,9 @@ export function mountSidebar(root: HTMLElement, store: Store) {
     item.appendChild(h('span', { class: 'sb-icon', text: '💬' }));
     item.appendChild(h('span', { class: 'sb-name', text: dlg.name }));
     item.appendChild(h('span', { class: 'sb-kind-badge', text: `${dlg.nodes.length} нод` }));
+    // длинные названия обрезаются — полное во всплывающей подсказке (+ первая реплика для ориентира)
+    const firstLine = dlg.nodes.find((n) => n.type === 'line' && n.text)?.text ?? '';
+    item.title = dlg.name + (firstLine ? `\n«${firstLine.slice(0, 90)}${firstLine.length > 90 ? '…' : ''}»` : '');
     const menu = h('button', { class: 'sb-menu-btn', text: '⋯' });
     menu.onclick = (e) => { e.stopPropagation(); showDialogueMenu(dlg, menu); };
     item.appendChild(menu);

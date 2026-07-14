@@ -7,7 +7,7 @@
 import {
   Project, Scene, SceneElement, Dialogue, DialogueNode,
   Condition, Effect, VarValue, CANVAS_W, CANVAS_H,
-  ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, RARITY_META, Rarity, STAT_LABELS,
+  ItemDef, ItemGrant, ItemSlot, ITEM_SLOT_LABELS, ITEM_TYPE_LABELS, RARITY_META, Rarity, STAT_LABELS, StatKey,
   PlaytestCheckpoint, uid, deepClone, BgEffectType, BgEffectRule, Faction, MaterialDef,
 } from '../core/types';
 import { ensureBgFxStyles } from './bgfx';
@@ -259,6 +259,14 @@ export class Engine {
     // стартовый инвентарь — только для новой игры
     if (!restored && this.project.hero?.startItems?.length) {
       this.giveItems(this.project.hero.startItems, true);
+      // логично начинать одетым: стартовые вещи со слотом надеваются сами (комбез и т.п.)
+      for (let i = this.inventory.length - 1; i >= 0; i--) {
+        const def = this.itemDef(this.inventory[i].itemId);
+        if (!def?.slot || this.equipment[def.slot]) continue;
+        this.equipment[def.slot] = def.id;
+        this.inventory[i].qty -= 1;
+        if (this.inventory[i].qty <= 0) this.inventory.splice(i, 1);
+      }
     }
     this.recomputeDerived();
 
@@ -364,6 +372,11 @@ export class Engine {
     if (scene.bgImage) this.bgImgEl.style.backgroundImage = `url(${scene.bgImage})`;
     this.bgImgEl.style.backgroundSize = 'cover';
     this.bgImgEl.style.backgroundPosition = `${posX}% ${posY}%`;
+    // cover на картинке с аспектом сцены не оставляет переполнения — background-position
+    // нечего двигать; двигаем сам слой (у него запас inset:-10% = ±8.33% собственной ширины)
+    const shiftX = ((50 - posX) / 50) * 8.33;
+    const shiftY = ((50 - posY) / 50) * 8.33;
+    this.bgImgEl.style.transform = (shiftX || shiftY) ? `translate(${shiftX.toFixed(2)}%, ${shiftY.toFixed(2)}%)` : '';
     this.bgImgEl.style.opacity = String(opacity);
     this.bgZoomEl.style.transform = scale !== 1 ? `scale(${scale})` : '';
 
@@ -895,10 +908,16 @@ export class Engine {
     });
     this.renderHeroHUD();
     this.renderOskolokHUD();
+    this.renderMeshToggle();
   }
 
-  /** HUD включён/выключен для текущей сцены: явный выбор в инспекторе или авто (скрыт на страницах) */
+  /** HUD включён/выключен для текущей сцены: явный выбор в инспекторе или авто (скрыт на страницах).
+   *  Выключенный Mesh глушит весь HUD (интерфейс — это mesh-слой); кнопка Mesh живёт отдельно. */
   private hudVisible(): boolean {
+    if (this.oskolokLevel >= 1) {
+      const meshVar = this.project.variables.find((x) => x.name === 'mesh_on');
+      if (meshVar && !this.state[meshVar.id]) return false;
+    }
     const mode = this.currentScene?.hudMode ?? 'auto';
     if (mode === 'on') return true;
     if (mode === 'off') return false;
@@ -972,34 +991,6 @@ export class Engine {
       wrap.appendChild(j);
     }
 
-    // переключатель Mesh (канон oskolok-mesh.md §5): глиф-тумблер, никаких слов ON/OFF
-    const meshVar = this.project.variables.find((x) => x.name === 'mesh_on');
-    if (meshVar && this.oskolokLevel >= 1) {
-      const on = !!this.state[meshVar.id];
-      const b = document.createElement('div');
-      b.title = on ? 'Mesh включён — щёлкните, чтобы выключить' : 'Mesh выключен — щёлкните, чтобы включить';
-      b.style.cssText = `display:flex;flex-direction:column;align-items:center;justify-content:center;
-        width:2.2em;height:1.9em;cursor:pointer;pointer-events:auto;user-select:none;position:relative;
-        opacity:${on ? '0.9' : '0.45'};transition:opacity .15s;`;
-      const g = document.createElement('div');
-      g.textContent = '◈';
-      g.style.cssText = `font-size:0.85em;line-height:1;color:${on ? accent : '#5f7a8a'};`;
-      const lbl = document.createElement('div');
-      lbl.textContent = 'MESH';
-      lbl.style.cssText = 'font-size:0.3em;letter-spacing:2px;color:#5f7a8a;margin-top:0.25em;';
-      b.append(g, lbl);
-      if (!on) {
-        const cross = document.createElement('div');
-        cross.style.cssText = `position:absolute;top:8%;left:30%;width:40%;height:60%;pointer-events:none;
-          background:linear-gradient(to top right, transparent 46%, #5f7a8a 48%, #5f7a8a 52%, transparent 54%);`;
-        b.appendChild(cross);
-      }
-      b.onmouseenter = () => { b.style.opacity = '1'; };
-      b.onmouseleave = () => { b.style.opacity = on ? '0.9' : '0.45'; };
-      b.onclick = () => this.applyEffects([{ varId: meshVar.id, op: 'toggle', value: true }]);
-      wrap.appendChild(b);
-    }
-
     this.hudLayer.appendChild(wrap);
 
     // валюта — правый край HUD, тихая строка
@@ -1014,6 +1005,41 @@ export class Engine {
         font-size:0.8em;letter-spacing:2px;`;
       this.hudLayer.appendChild(cred);
     }
+  }
+
+  /** Тумблер Mesh (канон oskolok-mesh.md §5): с момента получения Осколка — ПОСТОЯННАЯ
+   *  кнопка на всю игру. Живёт отдельно от HUD, чуть ниже него (под полосой шёпота Архона):
+   *  mesh_off гасит HUD и mesh-слой карты, но кнопка остаётся — единственный способ вернуться.
+   *  Не показывается на страницах-меню (kind 'page'). */
+  private renderMeshToggle() {
+    const meshVar = this.project.variables.find((x) => x.name === 'mesh_on');
+    if (!meshVar || this.oskolokLevel < 1) return;
+    if ((this.currentScene?.kind ?? 'location') === 'page') return;
+    const accent = this.project.theme.accent;
+    const on = !!this.state[meshVar.id];
+    const b = document.createElement('div');
+    b.title = on ? 'Mesh включён — щёлкните, чтобы выключить' : 'Mesh выключен — щёлкните, чтобы включить';
+    b.style.cssText = `position:absolute;top:13.5%;left:2%;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      width:2.2em;height:1.9em;cursor:pointer;pointer-events:auto;user-select:none;
+      opacity:${on ? '0.9' : '0.5'};transition:opacity .15s;`;
+    const g = document.createElement('div');
+    g.textContent = '◈';
+    g.style.cssText = `font-size:0.85em;line-height:1;color:${on ? accent : '#5f7a8a'};position:relative;`;
+    const lbl = document.createElement('div');
+    lbl.textContent = 'MESH';
+    lbl.style.cssText = 'font-size:0.3em;letter-spacing:2px;color:#5f7a8a;margin-top:0.25em;';
+    b.append(g, lbl);
+    if (!on) {
+      const cross = document.createElement('div');
+      cross.style.cssText = `position:absolute;top:8%;left:30%;width:40%;height:60%;pointer-events:none;
+        background:linear-gradient(to top right, transparent 46%, #5f7a8a 48%, #5f7a8a 52%, transparent 54%);`;
+      b.appendChild(cross);
+    }
+    b.onmouseenter = () => { b.style.opacity = '1'; };
+    b.onmouseleave = () => { b.style.opacity = on ? '0.9' : '0.5'; };
+    b.onclick = () => this.applyEffects([{ varId: meshVar.id, op: 'toggle', value: true }]);
+    this.hudLayer.appendChild(b);
   }
 
   private renderOskolokHUD() {
@@ -1523,13 +1549,19 @@ export class Engine {
       const img = document.createElement('img');
       img.className = 'dportrait';
       img.src = npcPortrait(this.project, npc);
-      img.style.cssText = `width:2.6em;height:2.6em;border-radius:50%;flex:0 0 auto;cursor:pointer;
+      img.style.cssText = `width:2.6em;height:2.6em;border-radius:50%;flex:0 0 auto;
         border:1px solid color-mix(in srgb, var(--dbox-name-accent) 55%, transparent);padding:2px;box-sizing:border-box;
         transition:transform .15s;`;
-      img.title = 'Открыть профиль персонажа';
-      img.onmouseenter = () => { img.style.transform = 'scale(1.08)'; };
-      img.onmouseleave = () => { img.style.transform = ''; };
-      img.onclick = (e) => { e.stopPropagation(); this.openCharacterProfile(npc.id); };
+      // досье — способность Осколка: без него портрет не кликается (лорно: нечем «читать» людей)
+      if (this.oskolokLevel >= 1) {
+        img.style.cursor = 'pointer';
+        img.title = 'Открыть профиль персонажа';
+        img.onmouseenter = () => { img.style.transform = 'scale(1.08)'; };
+        img.onmouseleave = () => { img.style.transform = ''; };
+        img.onclick = (e) => { e.stopPropagation(); this.openCharacterProfile(npc.id); };
+      } else {
+        img.style.cursor = 'default'; // иначе наследует pointer от диалогового блока
+      }
       head.appendChild(img);
       const nameWrap = document.createElement('div');
       const sp = document.createElement('div');
@@ -2138,6 +2170,8 @@ export class Engine {
       it.onclick = () => { menu.remove(); fn(); };
       menu.appendChild(it);
     };
+    // осмотр — способность Осколка: без него карточку не открыть (нечем «сканировать»)
+    if (this.oskolokLevel >= 1) mk('Осмотреть', () => this.openItemCard(def));
     if (def.slot) mk('Экипировать', () => this.equipItem(index));
     if (def.type === 'consumable') mk('Использовать', () => this.useItem(index));
     if (!def.questItem) {
@@ -2149,6 +2183,96 @@ export class Engine {
     }
     mk('Закрыть', () => { /* просто закрыть */ });
     this.invLayer.appendChild(menu);
+  }
+
+  /** Карточка предмета «Осмотреть» (Осколок ур.1+): аватар, название, тип/слот,
+   *  редкость, цена, статы, описание — всё, что игроку нужно знать. */
+  private openItemCard(def: ItemDef) {
+    const rar = RARITY_META[def.rarity];
+    const accent = this.project.theme.accent;
+    const backdrop = document.createElement('div');
+    backdrop.className = 'tls-item-card-backdrop';
+    backdrop.style.cssText = `position:absolute;inset:0;z-index:70;display:flex;align-items:center;
+      justify-content:center;background:rgba(3,7,10,0.55);backdrop-filter:blur(3px);pointer-events:auto;`;
+    backdrop.onclick = (e) => { if (e.target === backdrop) backdrop.remove(); };
+
+    const card = document.createElement('div');
+    card.style.cssText = `width:15.5em;max-width:86%;max-height:86%;overflow-y:auto;box-sizing:border-box;
+      background:rgba(7,12,17,0.96);border:1px solid rgba(255,255,255,0.10);
+      border-top:1px solid ${rar.color};padding:1.1em 1.2em;font-size:0.78em;color:#cfd9e2;`;
+    backdrop.appendChild(card);
+
+    // шапка: аватар + имя + kicker
+    const head = document.createElement('div');
+    head.style.cssText = 'display:flex;gap:0.9em;align-items:center;';
+    const img = document.createElement('img');
+    img.src = itemIcon(def);
+    img.style.cssText = `width:4em;height:4em;flex:none;border:1px solid ${rar.color}66;
+      background:rgba(255,255,255,0.03);padding:0.25em;box-sizing:border-box;`;
+    const hwrap = document.createElement('div');
+    const nm = document.createElement('div');
+    nm.textContent = def.name;
+    nm.style.cssText = `color:${rar.color};font-size:1.1em;font-weight:300;letter-spacing:0.04em;`;
+    const kick = document.createElement('div');
+    kick.textContent = [...new Set([ITEM_TYPE_LABELS[def.type], def.slot ? ITEM_SLOT_LABELS[def.slot] : '', rar.label]
+      .filter(Boolean))].join(' · ').toUpperCase();
+    kick.style.cssText = 'margin-top:0.35em;font-size:0.62em;letter-spacing:2px;color:#5f7a8a;';
+    hwrap.append(nm, kick);
+    head.append(img, hwrap);
+    card.appendChild(head);
+
+    const hr = () => {
+      const d = document.createElement('div');
+      d.style.cssText = 'height:1px;background:rgba(255,255,255,0.08);margin:0.8em 0;';
+      return d;
+    };
+    const quietRow = (label: string, value: string, color = '#cfd9e2') => {
+      const r = document.createElement('div');
+      r.style.cssText = 'display:flex;justify-content:space-between;gap:1em;margin-top:0.4em;font-size:0.82em;';
+      const l = document.createElement('span');
+      l.textContent = label;
+      l.style.cssText = 'color:#5f7a8a;';
+      const v = document.createElement('span');
+      v.textContent = value;
+      v.style.color = color;
+      r.append(l, v);
+      return r;
+    };
+
+    // статы и свойства
+    const statEntries = Object.entries(def.stats ?? {}).filter(([, n]) => n);
+    if (statEntries.length || def.cellsBonus) {
+      card.appendChild(hr());
+      for (const [k, n] of statEntries) {
+        card.appendChild(quietRow(STAT_LABELS[k as StatKey] ?? k, `${Number(n) > 0 ? '+' : ''}${n}`, accent));
+      }
+      if (def.cellsBonus) card.appendChild(quietRow('Ячейки инвентаря', `+${def.cellsBonus}`, accent));
+    }
+
+    card.appendChild(hr());
+    card.appendChild(quietRow('Цена', def.price > 0 ? `⌬ ${def.price}` : '—'));
+    if ((def.stack ?? 1) > 1) card.appendChild(quietRow('В стопке до', String(def.stack)));
+    if (def.questItem) card.appendChild(quietRow('Сюжетный предмет', 'не продать, не выбросить', '#b39cf0'));
+
+    if (def.description) {
+      card.appendChild(hr());
+      const desc = document.createElement('div');
+      desc.textContent = def.description;
+      desc.style.cssText = 'font-size:0.82em;line-height:1.55;color:#aebfca;font-weight:300;';
+      card.appendChild(desc);
+    }
+
+    const close = document.createElement('div');
+    close.textContent = 'ЗАКРЫТЬ';
+    close.style.cssText = `margin-top:1.1em;text-align:center;padding:0.5em 0;cursor:pointer;
+      border:1px solid rgba(255,255,255,0.14);color:#8fa2af;font-size:0.68em;letter-spacing:3px;
+      transition:border-color .15s, color .15s;`;
+    close.onmouseenter = () => { close.style.borderColor = `${accent}88`; close.style.color = accent; };
+    close.onmouseleave = () => { close.style.borderColor = 'rgba(255,255,255,0.14)'; close.style.color = '#8fa2af'; };
+    close.onclick = () => backdrop.remove();
+    card.appendChild(close);
+
+    this.invLayer.appendChild(backdrop);
   }
 }
 

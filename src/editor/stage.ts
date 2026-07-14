@@ -349,7 +349,10 @@ export class StageView {
     if (scene.bgImage) img.style.backgroundImage = `url(${scene.bgImage})`;
     img.style.backgroundSize = 'cover';
     img.style.backgroundPosition = `${posX}% ${posY}%`;
-    img.style.transform = `scale(${scale})`;
+    // как в движке: cover не даёт переполнения — X/Y двигают сам слой (запас inset:-10%)
+    const shiftX = ((50 - posX) / 50) * 8.33;
+    const shiftY = ((50 - posY) / 50) * 8.33;
+    img.style.transform = `translate(${shiftX.toFixed(2)}%, ${shiftY.toFixed(2)}%) scale(${scale})`;
     img.style.opacity = String(opacity);
     img.style.filter = `brightness(${brightness}%) contrast(${contrast}%)${blur ? ` blur(${blur}px)` : ''}`;
     wrap.appendChild(img);
