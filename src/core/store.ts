@@ -36,6 +36,10 @@ export class Store {
   mapLookPreviewId: string | null = null;
   /** Анимации карты (переливы/поток/пульс) прямо на холсте. Только для редактора. */
   mapAnimatePreview = true;
+  /** Форс конкретной пометки на холсте (кнопка «👁» в редакторе узла). Только для редактора. */
+  mapMarkPreview: { nodeId: string; markId: string } | null = null;
+  /** Режим правки раскладки HUD на холсте (drag макетов). Только для редактора. */
+  hudEditMode = false;
 
   // настройки вида
   snapEnabled = true;

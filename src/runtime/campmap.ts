@@ -12,8 +12,8 @@
 // ============================================================
 
 import {
-  Scene, CampMapConfig, CampMapNode, CampMapLink, CampNodeLook, CampLinkLook,
-  CampMapMarkerStyle, Condition, CANVAS_W, CANVAS_H,
+  Scene, Project, CampMapConfig, CampMapNode, CampMapLink, CampMapMark, CampNodeLook,
+  CampLinkLook, CampMapMarkerStyle, Condition, VarValue, CANVAS_W, CANVAS_H,
 } from '../core/types';
 import type { Engine } from './engine';
 import { npcPortrait } from '../core/npc';
@@ -21,11 +21,41 @@ import { npcPortrait } from '../core/npc';
 const ACCENT = '#4fd1c5';
 
 /** Первая активная пометка узла (для карты) */
-function activeMark(eng: Engine, node: CampMapNode): string {
+function activeMark(eng: Engine, node: CampMapNode): CampMapMark | null {
   for (const m of node.marks ?? []) {
-    if (eng.checkConditions(m.conditions)) return eng.interpolate(m.text);
+    if (eng.checkConditions(m.conditions)) return m;
   }
-  return '';
+  return null;
+}
+
+/** Цвет пометки: свой → правило маркера (◊ — акцент, прочее — приглушённо) */
+export function markColor(m: CampMapMark, accent: string, quietColor = '#8fa7b5'): string {
+  return m.color || (m.text.startsWith('◊') ? accent : quietColor);
+}
+
+/** Условия по СТАРТОВЫМ значениям переменных — «карта глазами нового игрока».
+ *  Нужен холсту редактора: там нет живого состояния, но пометки/замки/видимость
+ *  должны совпадать с тем, что игрок увидит в новой игре. */
+export function evalConditionsInitial(project: Project, conds: Condition[] | undefined): boolean {
+  if (!conds || conds.length === 0) return true;
+  const val = (id: string): VarValue => {
+    const v = project.variables.find((x) => x.id === id);
+    if (!v) return false;
+    if (v.category === 'computed') return typeof v.initial === 'number' ? 0 : false;
+    return v.initial;
+  };
+  return conds.every((c) => {
+    const cur = val(c.varId);
+    const v = c.value;
+    switch (c.op) {
+      case 'eq': return cur === v || String(cur) === String(v);
+      case 'ne': return cur !== v && String(cur) !== String(v);
+      case 'gt': return Number(cur) > Number(v);
+      case 'gte': return Number(cur) >= Number(v);
+      case 'lt': return Number(cur) < Number(v);
+      case 'lte': return Number(cur) <= Number(v);
+    }
+  });
 }
 
 function isLocked(eng: Engine, node: CampMapNode): boolean {
@@ -34,7 +64,7 @@ function isLocked(eng: Engine, node: CampMapNode): boolean {
 }
 
 // ---------- вид узла: дефолт карты → узел → lookIf по условиям ----------
-function mergeLook(base: CampNodeLook, over?: CampNodeLook): CampNodeLook {
+export function mergeLook(base: CampNodeLook, over?: CampNodeLook): CampNodeLook {
   if (!over) return { ...base };
   const out: Record<string, unknown> = { ...base };
   for (const [k, v] of Object.entries(over)) if (v !== undefined) out[k] = v;
@@ -50,13 +80,16 @@ export function baseNodeLook(cfg: CampMapConfig, node: CampMapNode): CampNodeLoo
 }
 
 /** Вид узла для холста редактора с выбранным «видом при условиях» карты
- *  (порядок как в игре: дефолт карты → lookIf карты → узел) */
-export function previewNodeLook(cfg: CampMapConfig, node: CampMapNode, lookIfId: string | null): CampNodeLook {
+ *  (порядок как в игре: дефолт карты → lookIf карты → узел → вид текущего положения) */
+export function previewNodeLook(cfg: CampMapConfig, node: CampMapNode, lookIfId: string | null, isCurrent = false): CampNodeLook {
   const li = lookIfId ? (cfg.nodeLookIf ?? []).find((x) => x.id === lookIfId) : undefined;
-  if (!li) return baseNodeLook(cfg, node);
   const legacy: CampNodeLook = cfg.marker?.ringOpacity !== undefined
     ? { borderOpacity: cfg.marker.ringOpacity } : {};
-  return mergeLook(mergeLook(mergeLook(legacy, cfg.nodeLook), li.look), node.look);
+  let look = mergeLook(legacy, cfg.nodeLook);
+  if (li) look = mergeLook(look, li.look);
+  look = mergeLook(look, node.look);
+  if (isCurrent && cfg.currentLook) look = mergeLook(look, cfg.currentLook);
+  return look;
 }
 
 /** Индекс первого активного lookIf в списке (-1 — нет) */
@@ -67,8 +100,9 @@ function activeLookIdx(eng: Engine, list?: { conditions: Condition[] }[]): numbe
   return -1;
 }
 
-/** Полный вид узла: устаревший ringOpacity → дефолт карты → lookIf карты → узел → lookIf узла */
-function resolveNodeLook(eng: Engine, cfg: CampMapConfig, node: CampMapNode): CampNodeLook {
+/** Полный вид узла: устаревший ringOpacity → дефолт карты → lookIf карты → узел → lookIf узла
+ *  → (если здесь ГГ) вид текущего положения */
+function resolveNodeLook(eng: Engine, cfg: CampMapConfig, node: CampMapNode, isCurrent = false): CampNodeLook {
   const legacy: CampNodeLook = cfg.marker?.ringOpacity !== undefined
     ? { borderOpacity: cfg.marker.ringOpacity } : {};
   let look = mergeLook(legacy, cfg.nodeLook);
@@ -77,6 +111,7 @@ function resolveNodeLook(eng: Engine, cfg: CampMapConfig, node: CampMapNode): Ca
   look = mergeLook(look, node.look);
   const idx = activeLookIdx(eng, node.lookIf);
   if (idx >= 0) look = mergeLook(look, node.lookIf![idx].look);
+  if (isCurrent && cfg.currentLook) look = mergeLook(look, cfg.currentLook);
   return look;
 }
 
@@ -103,7 +138,8 @@ export function campMapSig(eng: Engine, scene: Scene): string {
   const cur = eng.mapLoc[scene.id] ?? cfg.homeNodeId ?? '';
   const nodes = cfg.nodes.map((n) => {
     const vis = eng.checkConditions(n.visibleIf);
-    return `${n.id}:${vis ? 1 : 0}${isLocked(eng, n) ? 'L' : ''}:${activeLookIdx(eng, n.lookIf)}:${activeMark(eng, n)}`;
+    const mark = activeMark(eng, n);
+    return `${n.id}:${vis ? 1 : 0}${isLocked(eng, n) ? 'L' : ''}:${activeLookIdx(eng, n.lookIf)}:${mark ? eng.interpolate(mark.text) : ''}`;
   }).join('|');
   const links = (cfg.links ?? []).map((l) => (eng.checkConditions(l.visibleIf) ? 1 : 0)).join('');
   return `${cur}|g${activeLookIdx(eng, cfg.nodeLookIf)}|${nodes}|L:${links}`;
@@ -130,6 +166,7 @@ export interface DiamondSpec {
   dimK?: number;                   // приглушение «дали» 0.25–1
   title: string;
   markText?: string;               // активная пометка ('' — нет)
+  markColor?: string;              // цвет пометки (нет — правило ◊/·)
   titlePx: number;                 // размер подписи в px логического холста (em = /26)
   accent?: string;                 // цвет акцента (по умолчанию цвет маркера)
   animate?: boolean;               // false — статичный холст редактора
@@ -247,8 +284,9 @@ export function renderDiamond(spec: DiamondSpec): HTMLElement {
     const m = document.createElement('div');
     m.textContent = spec.markText;
     const quiet = spec.locked || !spec.markText.startsWith('◊');
+    const color = spec.locked ? '#8fa7b5' : (spec.markColor || (quiet ? '#8fa7b5' : accent));
     m.style.cssText = `font-size:${((spec.titlePx - 6) / 26).toFixed(3)}em;margin-top:0.3em;
-      letter-spacing:0.05em;color:${quiet ? '#8fa7b5' : accent};
+      letter-spacing:0.05em;color:${color};
       text-shadow:0 1px 2px rgba(0,0,0,0.9), 0 0 10px rgba(0,0,0,0.75);`;
     label.appendChild(m);
   }
@@ -261,7 +299,8 @@ export interface LinkDrawOpts {
   animate?: boolean;                       // false — холст редактора
   interactive?: boolean;                   // true — линии ловят клики (редактор)
   onLineClick?: (link: CampMapLink) => void;
-  minOpacity?: number;                     // холст редактора: не даём линиям потеряться на фоне
+  /** Редактор: связь скрыта на старте игры — рисуем вдвое бледнее (но рисуем: её надо мочь удалить) */
+  isLinkDimmed?: (link: CampMapLink) => boolean;
 }
 
 /** SVG-слой пунктиров между центрами узлов; координаты — % → логические px холста */
@@ -288,13 +327,13 @@ export function renderLinksSvg(
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
     line.setAttribute('x1', String(x1)); line.setAttribute('y1', String(y1));
     line.setAttribute('x2', String(x2)); line.setAttribute('y2', String(y2));
-    line.setAttribute('stroke', `color-mix(in srgb, ${l.color} ${Math.max(opts.minOpacity ?? 0, Math.min(100, l.opacity))}%, transparent)`);
+    // честно: стиль линии 1:1 как в игре (никаких «усилений» для редактора)
+    line.setAttribute('stroke', `color-mix(in srgb, ${l.color} ${Math.max(0, Math.min(100, l.opacity))}%, transparent)`);
     line.setAttribute('stroke-width', String(l.width));
     line.setAttribute('vector-effect', 'non-scaling-stroke');
-    // на холсте редактора (minOpacity задан) пунктир плотнее — при зуме <100% штрихи 4px вырождаются в точки
-    const dashLen = opts.minOpacity ? Math.max(l.dash, 8) : l.dash;
-    const gap = dashLen > 0 ? dashLen * (opts.minOpacity ? 1.4 : 2.25) : 0;
-    if (dashLen > 0) line.setAttribute('stroke-dasharray', `${dashLen} ${gap}`);
+    const gap = l.dash > 0 ? l.dash * 2.25 : 0;
+    if (l.dash > 0) line.setAttribute('stroke-dasharray', `${l.dash} ${gap}`);
+    if (opts.isLinkDimmed?.(link)) line.style.opacity = '0.45';
     if (opts.animate !== false && l.flow === 'run' && l.dash > 0) {
       line.classList.add('cmap-linkrun');
       line.style.setProperty('--cyc', `${-(l.dash + gap)}`);
@@ -313,6 +352,15 @@ export function renderLinksSvg(
         if (e.button !== 0) return;
         e.stopPropagation();
         opts.onLineClick!(link);
+      });
+      // наведение подсвечивает линию (вид не искажаем — помогаем только мыши)
+      hitLine.addEventListener('pointerenter', () => {
+        line.style.filter = `drop-shadow(0 0 3px ${ACCENT})`;
+        line.setAttribute('stroke-width', String(l.width + 1));
+      });
+      hitLine.addEventListener('pointerleave', () => {
+        line.style.filter = '';
+        line.setAttribute('stroke-width', String(l.width));
       });
       svg.appendChild(line);
       svg.appendChild(hitLine);
@@ -372,25 +420,29 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
     const mk = cfg.marker ?? {};
     const mkPulse = mk.pulse ?? 'current';
 
-    // узлы
-    for (const node of visibleNodes) {
+    // узлы: крупные снизу, мелкие сверху — иначе большой ромб перекрывает соседей от кликов
+    const drawOrder = [...visibleNodes].sort((a, b) => (b.size ?? 14) - (a.size ?? 14));
+    for (const node of drawOrder) {
       const size = node.size ?? 14;
       const h = nodeH(size);
       const locked = isLocked(eng, node);
       const isCurrent = node.id === currentId;
       const isSel = node.id === selected;
       const dimK = Math.max(0.25, 1 - (node.dim ?? 0) / 100);
-      const markText = locked ? '···заперто' : activeMark(eng, node);
+      const mark = activeMark(eng, node);
+      const markText = locked ? '···заперто' : mark ? eng.interpolate(mark.text) : '';
 
       const wrap = renderDiamond({
-        look: resolveNodeLook(eng, cfg, node),
+        look: resolveNodeLook(eng, cfg, node, isCurrent),
         marker: mk,
-        state: isSel ? 'selected' : isCurrent ? 'current' : 'normal',
+        // если владелец задал свой вид «текущего положения», встроенную подсветку не рисуем
+        state: isSel ? 'selected' : (isCurrent && !cfg.currentLook) ? 'current' : 'normal',
         locked,
         pulsing: !locked && (mkPulse === 'all' || (mkPulse === 'current' && isCurrent)),
         dimK,
         title: node.title,
         markText,
+        markColor: !locked && mark ? markColor(mark, ACCENT) : undefined,
         titlePx: Math.round(6 + size * 0.95),
       });
       wrap.style.left = `${node.x - size / 2}%`;
@@ -468,12 +520,10 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
       }
       for (const m of selNode.marks ?? []) {
         if (!eng.checkConditions(m.conditions)) continue;
-        const text = eng.interpolate(m.text);
-        const quiet = !text.startsWith('◊');
         const row = document.createElement('div');
-        row.textContent = text;
+        row.textContent = eng.interpolate(m.text);
         row.style.cssText = `margin-top:0.35em;font-size:0.42em;letter-spacing:1px;
-          color:${quiet ? '#5f7a8a' : ACCENT};`;
+          color:${markColor(m, ACCENT, '#5f7a8a')};`;
         body.appendChild(row);
       }
 

@@ -11,6 +11,8 @@ import {
   CampMapNode, CampNodeLook, CampLinkLook, CampLinkFlow,
 } from '../core/types';
 import { TEXT_GUARD_LABELS } from '../runtime/elementfx';
+import { makeCondEffectEditors } from './condedit';
+import { openMapNodeModal, openMapLookModal } from './mapmodal';
 import { BOX_BORDER_LABELS, BOX_SURFACE_LABELS, BOX_TEMPO_LABELS, BOX_INTENSITY_LABELS } from '../runtime/boxfx';
 import { materialPreview } from './matpreview';
 import { duplicateElement } from '../core/store';
@@ -123,6 +125,7 @@ export function mountInspector(root: HTMLElement, store: Store) {
     ));
 
     root.appendChild(campMapSection(scene));
+    root.appendChild(hudLayoutSection());
     root.appendChild(zoneSection(scene));
 
     const bgUpload = h('button', { class: 'btn small block', text: '📁 Загрузить картинку фона…' });
@@ -354,58 +357,9 @@ export function mountInspector(root: HTMLElement, store: Store) {
     root.appendChild(libSection);
   }
 
-  // ================= КАРТА ЛАГЕРЯ (блоки I, J) =================
-  /** Ручки вида ромба-узла; get — живой объект (или undefined), ensure — создать при первой правке */
-  function nodeLookControls(get: () => CampNodeLook | undefined, ensure: () => CampNodeLook): HTMLElement[] {
-    const cur = get() ?? {};
-    const set = (patch: Partial<CampNodeLook>) => mutate(() => { Object.assign(ensure(), patch); });
-    const setFx = (patch: Partial<BoxStyle>) => mutate(() => {
-      const l = ensure();
-      l.fx = { ...(l.fx ?? {}), ...patch };
-    });
-    return [
-      row('Заливка', colorRow(cur.fill ?? '', (v) => set({ fill: v || undefined }))),
-      row('Заливка, %', rangeInput(cur.fillOpacity ?? 5, 0, 100, 1, (v) => set({ fillOpacity: v }))),
-      row('Рамка', colorRow(cur.border ?? '', (v) => set({ border: v || undefined }))),
-      row('Рамка, %', rangeInput(cur.borderOpacity ?? 22, 0, 100, 1, (v) => set({ borderOpacity: v }))),
-      row('Толщина', rangeInput(cur.borderWidth ?? 1, 0, 6, 0.5, (v) => set({ borderWidth: v }))),
-      row('Анимация', selectInput(cur.fx?.border ?? 'none',
-        Object.entries(BOX_BORDER_LABELS) as [string, string][],
-        (v) => setFx({ border: v as BoxBorderFx }))),
-      ...borderTuning(cur.fx ?? {}, setFx),
-      row('Поверхность', selectInput(cur.fx?.surface ?? 'default',
-        Object.entries(BOX_SURFACE_LABELS) as [string, string][],
-        (v) => setFx({ surface: v as BoxSurface }))),
-      ...(cur.fx?.surface === 'spatial'
-        ? [row('Стекло, %', rangeInput(cur.fx?.glass ?? 14, 0, 40, 1, (v) => setFx({ glass: v })))] : []),
-      row('Цвет маркера', colorRow(cur.markerColor ?? '', (v) => set({ markerColor: v || undefined }))),
-      row('Свеч. маркера', rangeInput(cur.markerGlow ?? 60, 0, 100, 1, (v) => set({ markerGlow: v }))),
-      row('Подложка, %', rangeInput(cur.scrim ?? 50, 0, 100, 1, (v) => set({ scrim: v }))),
-      checkbox(cur.showMarker !== false, (v) => set({ showMarker: v ? undefined : false }), 'маркер-точка'),
-      checkbox(cur.showTitle !== false, (v) => set({ showTitle: v ? undefined : false }), 'подпись'),
-      checkbox(cur.showMark !== false, (v) => set({ showMark: v ? undefined : false }), 'пометка'),
-    ];
-  }
-
-  /** Ручки вида связи-пунктира */
-  function linkLookControls(get: () => CampLinkLook | undefined, ensure: () => CampLinkLook): HTMLElement[] {
-    const cur = get() ?? {};
-    const set = (patch: Partial<CampLinkLook>) => mutate(() => { Object.assign(ensure(), patch); });
-    return [
-      row('Цвет', colorRow(cur.color ?? '', (v) => set({ color: v || undefined }))),
-      row('Прозр., %', rangeInput(cur.opacity ?? 14, 0, 100, 1, (v) => set({ opacity: v }))),
-      row('Толщина', rangeInput(cur.width ?? 1.5, 0.5, 6, 0.5, (v) => set({ width: v }))),
-      row('Штрих', rangeInput(cur.dash ?? 4, 0, 20, 1, (v) => set({ dash: v }))),
-      row('Поток', selectInput(cur.flow ?? 'none', [
-        ['none', 'нет'], ['run', 'бегущий пунктир'], ['dot', 'бегущая точка'],
-      ], (v) => set({ flow: v as CampLinkFlow }))),
-      ...((cur.flow ?? 'none') !== 'none'
-        ? [row('Темп', selectInput(cur.tempo ?? 'normal',
-            Object.entries(BOX_TEMPO_LABELS) as [string, string][],
-            (v) => set({ tempo: v === 'normal' ? undefined : v as BoxTempo })))] : []),
-    ];
-  }
-
+  // ================= КАРТА ЛАГЕРЯ (блоки I, J, M) =================
+  // Настройки переехали в широкие модалки (mapmodal.ts): «Редактор узла»
+  // (двойной клик по узлу на холсте / ✎) и «⚙ Вид карты». Здесь — компакт.
   function campMapSection(scene: Scene): HTMLElement {
     const sec = section('Карта лагеря');
     sec.appendChild(checkbox(!!scene.campMap, (v) => mutate(() => {
@@ -413,98 +367,29 @@ export function mountInspector(root: HTMLElement, store: Store) {
     }), 'эта сцена — карта (план с ромбами-локациями)'));
     const cfg = scene.campMap;
     if (!cfg) {
-      sec.appendChild(h('div', { class: 'hint', text: 'План лагеря по прототипу: ромбы-локации с маркерами, связи-пунктиры, сайдбар «кто здесь» и кнопка ВОЙТИ. Обычные элементы сцены (заголовок, нарратив) рисуются под картой.' }));
+      sec.appendChild(h('div', { class: 'hint', text: 'План лагеря: ромбы-локации с маркерами, связи-пунктиры, сайдбар «кто здесь» и кнопка ВОЙТИ. Обычные элементы сцены рисуются под картой.' }));
       return sec;
     }
 
-    const nodeOptions = (): [string, string][] => [['', '— нет —'],
-      ...cfg.nodes.map((n) => [n.id, n.title || '(без названия)'] as [string, string])];
-    const sceneOptions: [string, string][] = [['', '— нет (декорация) —'],
-      ...store.project.scenes.filter((s) => s.id !== scene.id).map((s) => [s.id, s.name] as [string, string])];
+    const lookBtn = h('button', { class: 'btn small', text: '⚙ Вид карты…', title: 'Маркеры, вид узлов и связей, текущее положение, слои (Осколок)' });
+    lookBtn.onclick = () => openMapLookModal(store, scene);
+    sec.appendChild(lookBtn);
 
-    sec.appendChild(row('Положение ГГ', selectInput(cfg.homeNodeId ?? '', nodeOptions(),
-      (v) => mutate(() => { cfg.homeNodeId = v || undefined; }))));
-
-    // ---- маркеры-точки входа (общие) ----
-    {
-      const mk = () => (cfg.marker ?? (cfg.marker = {}));
-      const card = h('div', { class: 'cond-card' });
-      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Маркеры-точки входа (ромбики):' }));
-      const sz = h('div', { class: 'row' });
-      sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Размер' }));
-      sz.appendChild(numberInput(cfg.marker?.size ?? 11, (v) => mutate(() => { mk().size = Math.max(4, Math.min(40, v)); })));
-      sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', title: 'Сила свечения 0–100 (0 — выключено)', text: 'Свечение' }));
-      sz.appendChild(numberInput(cfg.marker?.glow ?? 60, (v) => mutate(() => { mk().glow = Math.max(0, Math.min(100, v)); })));
-      card.appendChild(sz);
-      card.appendChild(row('Цвет', colorField(cfg.marker?.color ?? '#4fd1c5', (v) => mutate(() => { mk().color = v || undefined; }))));
-      card.appendChild(row('Пульсация', selectInput(cfg.marker?.pulse ?? 'current', [
-        ['current', 'текущая локация'], ['all', 'все маркеры'], ['none', 'выключена'],
-      ], (v) => mutate(() => { mk().pulse = v === 'current' ? undefined : (v as 'all' | 'none'); }))));
-      sec.appendChild(card);
-    }
-
-    // ---- вид узлов и связей по умолчанию ----
-    {
-      const card = h('div', { class: 'cond-card' });
-      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Вид узлов (по умолчанию для всей карты):' }));
-      for (const el of nodeLookControls(() => cfg.nodeLook, () => (cfg.nodeLook ?? (cfg.nodeLook = {})))) card.appendChild(el);
-      sec.appendChild(card);
-
-      const lcard = h('div', { class: 'cond-card' });
-      lcard.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Вид связей (по умолчанию):' }));
-      for (const el of linkLookControls(() => cfg.linkLook, () => (cfg.linkLook ?? (cfg.linkLook = {})))) lcard.appendChild(el);
-      sec.appendChild(lcard);
-    }
-
-    // ---- вид всей карты при условиях (слой Осколка) ----
-    sec.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Вид всей карты при условиях (первый активный; узловые настройки сильнее):' }));
-    if ((cfg.nodeLookIf ?? []).length) {
-      // что показывает холст: базовый вид или один из условных (иначе красоту негде увидеть)
-      if (store.mapLookPreviewId && !(cfg.nodeLookIf ?? []).some((x) => x.id === store.mapLookPreviewId)) {
-        store.mapLookPreviewId = null;
-      }
-      sec.appendChild(row('Холст показывает', selectInput(store.mapLookPreviewId ?? '', [
-        ['', 'базовый вид'],
-        ...(cfg.nodeLookIf ?? []).map((li, i) => [li.id, li.name || `вид при условиях №${i + 1}`] as [string, string]),
-      ], (v) => { store.mapLookPreviewId = v || null; store.emit('selection'); })));
-    }
-    (cfg.nodeLookIf ?? []).forEach((li, i) => {
-      const card = h('div', { class: 'cond-card' });
-      const head = h('div', { class: 'row' });
-      head.appendChild(textInput(li.name ?? `вид при условиях №${i + 1}`, (v) => mutate(() => { li.name = v || undefined; })));
-      const del = h('button', { class: 'del', text: '✕' });
-      del.onclick = () => mutate(() => { cfg.nodeLookIf = (cfg.nodeLookIf ?? []).filter((x) => x.id !== li.id); });
-      head.appendChild(del);
-      card.appendChild(head);
-      card.appendChild(conditionsEditor(li.conditions, (list) => mutate(() => { li.conditions = list; })));
-      for (const el of nodeLookControls(() => li.look, () => li.look)) card.appendChild(el);
-      sec.appendChild(card);
-    });
-    {
-      const addLi = h('button', { class: 'btn small', text: '+ вид при условиях' });
-      addLi.onclick = () => mutate(() => {
-        cfg.nodeLookIf = [...(cfg.nodeLookIf ?? []), { id: uid('ml'), conditions: [], look: {} }];
-      });
-      sec.appendChild(addLi);
-
-      const preset = h('button', { class: 'btn small', text: '⚡ Слой Осколка' });
-      preset.title = 'Заполнить: «бумага» без Осколка → карта просыпается с Осколком и включённым Mesh';
-      preset.onclick = () => applyOskolokPreset(cfg);
-      sec.appendChild(preset);
-      sec.appendChild(h('div', { class: 'hint', text: 'Пресет «Слой Осколка»: базовый вид — «бумага» (тусклые контуры, серые маркеры), при oskolok≥1 и включённом Mesh — стекло, перелив, живые маркеры; связи видны только с Осколком. Всё это обычные поля — правьте после.' }));
-    }
-
-    // ---- узлы: компактный список; карточка — у выбранного на холсте ----
-    sec.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:8px;', text: `Узлы (${cfg.nodes.length}) — клик выделяет на холсте:` }));
+    // компактный список узлов
+    sec.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:8px;', text: `Узлы (${cfg.nodes.length}) — клик выделяет, ✎ или двойной клик по холсту открывает редактор:` }));
     for (const node of cfg.nodes) {
       const r = h('div', { class: 'row' });
       const btn = h('button', {
         class: 'btn small',
         style: `flex:1;text-align:left;${node.id === store.selectedMapNodeId ? 'border-color:var(--accent);color:var(--accent);' : ''}`,
         text: (node.id === cfg.homeNodeId ? '⌂ ' : '◇ ') + (node.title || '(без названия)'),
+        title: node.id === cfg.homeNodeId ? 'Здесь стоит ГГ (текущее положение)' : node.title,
       });
       btn.onclick = () => store.selectMapNode(node.id);
       r.appendChild(btn);
+      const edit = h('button', { class: 'btn small', text: '✎', title: 'Редактор узла' });
+      edit.onclick = () => { store.selectMapNode(node.id); openMapNodeModal(store, scene, node.id); };
+      r.appendChild(edit);
       const del = h('button', { class: 'del', text: '✕', title: 'Удалить узел' });
       del.onclick = () => mutate(() => {
         cfg.nodes = cfg.nodes.filter((n) => n.id !== node.id);
@@ -522,192 +407,80 @@ export function mountInspector(root: HTMLElement, store: Store) {
         cfg.nodes.push({ id, title: 'Новая локация', x: 50, y: 50, size: 14 } as CampMapNode);
       });
       store.selectMapNode(id);
+      openMapNodeModal(store, scene, id);
     };
     sec.appendChild(addNode);
 
-    // ---- карточка выбранного узла ----
+    // мини-карточка выбранного узла: самое частое, остальное — в редакторе узла
     const sel = cfg.nodes.find((n) => n.id === store.selectedMapNodeId);
-    if (sel) sec.appendChild(mapNodeCard(cfg, sel, sceneOptions));
+    if (sel) {
+      const card = h('div', { class: 'cond-card', style: 'border-color:var(--accent);' });
+      card.appendChild(row('Название', textInput(sel.title, (v) => mutate(() => { sel.title = v; }))));
+      const sceneOptions: [string, string][] = [['', '— нет (декорация) —'],
+        ...store.project.scenes.filter((s) => s.id !== scene.id).map((s) => [s.id, s.name] as [string, string])];
+      card.appendChild(row('Ведёт в сцену', selectInput(sel.sceneId ?? '', sceneOptions,
+        (v) => mutate(() => { sel.sceneId = v || undefined; }))));
+      const xy = h('div', { class: 'row' });
+      xy.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'X%' }));
+      xy.appendChild(numberInput(sel.x, (v) => mutate(() => { sel.x = Math.max(0, Math.min(100, v)); })));
+      xy.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Y%' }));
+      xy.appendChild(numberInput(sel.y, (v) => mutate(() => { sel.y = Math.max(0, Math.min(100, v)); })));
+      xy.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Разм' }));
+      xy.appendChild(numberInput(sel.size ?? 14, (v) => mutate(() => { sel.size = Math.max(3, Math.min(40, v)); })));
+      card.appendChild(xy);
+      const openBtn = h('button', { class: 'btn small', text: '✎ Редактор узла…' });
+      openBtn.onclick = () => openMapNodeModal(store, scene, sel.id);
+      card.appendChild(openBtn);
+      sec.appendChild(card);
+    }
 
-    sec.appendChild(h('div', { class: 'hint', text: 'Холст: клик по узлу — выделить (карточка здесь), перетаскивание — позиция, ручка ◢ — размер, порт ● — связь, клик по линии — удалить связь. Анимации и условия — в предпросмотре (F5).' }));
+    sec.appendChild(row('Положение ГГ', selectInput(cfg.homeNodeId ?? '', [['', '— нет —'],
+      ...cfg.nodes.map((n) => [n.id, n.title || '(без названия)'] as [string, string])],
+      (v) => mutate(() => { cfg.homeNodeId = v || undefined; }))));
+    sec.appendChild(h('div', { class: 'hint', text: 'Холст: клик — выделить, двойной клик — редактор узла, drag — позиция, ◢ — размер, ● — связь, клик по линии — удалить связь. Холст показывает карту «глазами нового игрока» (пометки/замки по стартовым значениям переменных); чипы справа сверху: вид и анимации.' }));
     return sec;
   }
 
-  /** Карточка одного узла карты (показывается для выбранного на холсте) */
-  function mapNodeCard(cfg: NonNullable<Scene['campMap']>, node: CampMapNode, sceneOptions: [string, string][]): HTMLElement {
-    const card = h('div', { class: 'cond-card', style: 'border-color:var(--accent);' });
-    const head = h('div', { style: 'display:flex;gap:6px;align-items:center;' });
-    head.appendChild(textInput(node.title, (v) => mutate(() => { node.title = v; })));
-    const close = h('button', { class: 'del', text: '—', title: 'Свернуть (снять выделение)' });
-    close.onclick = () => store.selectMapNode(null);
-    head.appendChild(close);
-    card.appendChild(head);
 
-    card.appendChild(row('Ведёт в сцену', selectInput(node.sceneId ?? '', sceneOptions,
-      (v) => mutate(() => { node.sceneId = v || undefined; }))));
-    const xy = h('div', { class: 'row' });
-    xy.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'X%' }));
-    xy.appendChild(numberInput(node.x, (v) => mutate(() => { node.x = Math.max(0, Math.min(100, v)); })));
-    xy.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Y%' }));
-    xy.appendChild(numberInput(node.y, (v) => mutate(() => { node.y = Math.max(0, Math.min(100, v)); })));
-    card.appendChild(xy);
-    const sz = h('div', { class: 'row' });
-    sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', text: 'Размер' }));
-    sz.appendChild(numberInput(node.size ?? 14, (v) => mutate(() => { node.size = Math.max(3, Math.min(40, v)); })));
-    sz.appendChild(h('span', { style: 'color:var(--text-dim);font-size:11px;', title: 'Приглушение «дальнего плана», 0–100', text: 'Даль' }));
-    sz.appendChild(numberInput(node.dim ?? 0, (v) => mutate(() => { node.dim = Math.max(0, Math.min(100, v)) || undefined; })));
-    card.appendChild(sz);
-    card.appendChild(row('Примета', textInput(node.tagline ?? '', (v) => mutate(() => { node.tagline = v || undefined; }))));
-    card.appendChild(row('Сайдбар', selectInput(node.side ?? 'right', [['right', 'выезжает справа'], ['left', 'выезжает слева']],
-      (v) => mutate(() => { node.side = v === 'left' ? 'left' : undefined; }))));
+  // ================= HUD ИГРЫ (блок M: раскладка, весь проект) =================
+  function hudLayoutSection(): HTMLElement {
+    const sec = section('HUD игры (весь проект)');
+    const hud = () => (store.project.hud ?? (store.project.hud = {}));
 
-    // вид этого узла
-    card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Вид узла (переопределяет общий; пустое поле — как у карты):' }));
-    for (const el of nodeLookControls(() => node.look, () => (node.look ?? (node.look = {})))) card.appendChild(el);
-    if (node.look && Object.keys(node.look).length) {
-      const reset = h('button', { class: 'btn small', text: 'сбросить вид узла' });
-      reset.onclick = () => mutate(() => { node.look = undefined; });
-      card.appendChild(reset);
-    }
-
-    // вид при условиях
-    card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Вид узла при условиях (первый активный):' }));
-    (node.lookIf ?? []).forEach((li) => {
-      const lc = h('div', { class: 'cond-card' });
-      const lr = h('div', { class: 'row' });
-      lr.appendChild(h('span', { style: 'flex:1;font-size:11px;color:var(--text-dim);', text: 'условия → вид' }));
-      const ldel = h('button', { class: 'del', text: '✕' });
-      ldel.onclick = () => mutate(() => { node.lookIf = (node.lookIf ?? []).filter((x) => x.id !== li.id); });
-      lr.appendChild(ldel);
-      lc.appendChild(lr);
-      lc.appendChild(conditionsEditor(li.conditions, (list) => mutate(() => { li.conditions = list; })));
-      for (const el of nodeLookControls(() => li.look, () => li.look)) lc.appendChild(el);
-      card.appendChild(lc);
+    const editBtn = h('button', {
+      class: 'btn small',
+      text: store.hudEditMode ? '✓ Готово (раскладка)' : '⤢ Редактировать раскладку на холсте',
+      title: 'Макеты элементов HUD появятся на холсте — тащите их мышью',
     });
-    const addLi = h('button', { class: 'btn small', text: '+ вид при условиях' });
-    addLi.onclick = () => mutate(() => {
-      node.lookIf = [...(node.lookIf ?? []), { id: uid('ml'), conditions: [], look: {} }];
-    });
-    card.appendChild(addLi);
+    editBtn.onclick = () => { store.hudEditMode = !store.hudEditMode; store.emit('selection'); };
+    sec.appendChild(editBtn);
 
-    // живые пометки
-    card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Живые пометки (◊ — акцент; на карте видна первая активная):' }));
-    for (const m of node.marks ?? []) {
-      const mc = h('div', { class: 'cond-card' });
-      const mr = h('div', { class: 'row' });
-      mr.appendChild(textInput(m.text, (v) => mutate(() => { m.text = v; })));
-      const mdel = h('button', { class: 'del', text: '✕' });
-      mdel.onclick = () => mutate(() => { node.marks = (node.marks ?? []).filter((x) => x.id !== m.id); });
-      mr.appendChild(mdel);
-      mc.appendChild(mr);
-      mc.appendChild(conditionsEditor(m.conditions, (list) => mutate(() => { m.conditions = list; })));
-      card.appendChild(mc);
-    }
-    const addMark = h('button', { class: 'btn small', text: '+ пометка' });
-    addMark.onclick = () => mutate(() => {
-      node.marks = [...(node.marks ?? []), { id: uid('mm'), text: '◊ есть разговор', conditions: [] }];
-    });
-    card.appendChild(addMark);
+    const vis = (key: 'heroBar' | 'currency' | 'factionBtn' | 'meshBtn', label: string, note?: string) => {
+      const cur = store.project.hud?.[key]?.show !== false;
+      const cb = checkbox(cur, (v) => mutate(() => {
+        const c = (hud()[key] ?? (hud()[key] = {}));
+        c.show = v ? undefined : false;
+      }), label);
+      if (note) cb.title = note;
+      return cb;
+    };
+    sec.appendChild(vis('heroBar', 'полосы героя (уровень, HP/FOC, 🎒, 📋)'));
+    sec.appendChild(vis('currency', 'валюта ⌬'));
+    sec.appendChild(vis('factionBtn', '◈ панель фракций (Осколок ур.2+)'));
+    sec.appendChild(vis('meshBtn', 'кнопка MESH', 'Прячьте осознанно: без неё игрок не сможет вернуть Mesh'));
 
-    // связи этого узла (стиль каждой)
-    const nodeLinks = (cfg.links ?? []).filter((l) => l.a === node.id || l.b === node.id);
-    if (nodeLinks.length) {
-      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Связи узла (создаются на холсте портом ●):' }));
-      for (const link of nodeLinks) {
-        const otherId = link.a === node.id ? link.b : link.a;
-        const other = cfg.nodes.find((n) => n.id === otherId);
-        const lc = h('div', { class: 'cond-card' });
-        const lr = h('div', { class: 'row' });
-        lr.appendChild(h('span', { style: 'flex:1;font-size:12px;', text: `↔ ${other?.title ?? '(удалён)'}` }));
-        const ldel = h('button', { class: 'del', text: '✕' });
-        ldel.onclick = () => mutate(() => { cfg.links = (cfg.links ?? []).filter((l) => l !== link); });
-        lr.appendChild(ldel);
-        lc.appendChild(lr);
-        for (const el of linkLookControls(() => link.look, () => (link.look ?? (link.look = {})))) lc.appendChild(el);
-        lc.appendChild(h('div', { class: 'hint', text: 'Связь видна при условиях (пусто — всегда):' }));
-        lc.appendChild(conditionsEditor(link.visibleIf ?? [], (list) => mutate(() => {
-          link.visibleIf = list.length ? list : undefined;
-        })));
-        card.appendChild(lc);
+    const reset = h('button', { class: 'btn small', text: 'сбросить позиции' });
+    reset.onclick = () => mutate(() => {
+      const cur = store.project.hud;
+      if (!cur) return;
+      for (const k of ['heroBar', 'currency', 'factionBtn', 'meshBtn'] as const) {
+        if (cur[k]) { delete cur[k]!.x; delete cur[k]!.y; }
       }
-    }
-
-    // кто здесь
-    const npcs = store.project.npcs ?? [];
-    card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Кто здесь (сайдбар):' }));
-    for (const id of node.npcIds ?? []) {
-      const npc = npcs.find((n) => n.id === id);
-      const nr = h('div', { class: 'row' });
-      nr.appendChild(h('span', { style: 'flex:1;font-size:12px;', text: npc ? npc.name : '(удалённый NPC)' }));
-      const ndel = h('button', { class: 'del', text: '✕' });
-      ndel.onclick = () => mutate(() => { node.npcIds = (node.npcIds ?? []).filter((x) => x !== id); });
-      nr.appendChild(ndel);
-      card.appendChild(nr);
-    }
-    const freeNpcs = npcs.filter((n) => !(node.npcIds ?? []).includes(n.id));
-    if (freeNpcs.length) {
-      card.appendChild(selectInput('', [['', '+ добавить персонажа…'],
-        ...freeNpcs.map((n) => [n.id, n.name] as [string, string])],
-        (v) => { if (v) mutate(() => { node.npcIds = [...(node.npcIds ?? []), v]; }); }));
-    }
-
-    // заперто
-    card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Заперто, когда все условия верны (пусто — открыто):' }));
-    card.appendChild(conditionsEditor(node.lockedIf ?? [], (list) => mutate(() => {
-      node.lockedIf = list.length ? list : undefined;
-    })));
-    if (node.lockedIf?.length) {
-      card.appendChild(row('Текст запрета', textInput(node.lockedText ?? '', (v) => mutate(() => {
-        node.lockedText = v || undefined;
-      }))));
-    }
-
-    // видимость
-    card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);margin-top:6px;', text: 'Узел виден при условии (пусто — всегда):' }));
-    card.appendChild(conditionsEditor(node.visibleIf ?? [], (list) => mutate(() => {
-      node.visibleIf = list.length ? list : undefined;
-    })));
-
-    return card;
-  }
-
-  /** Пресет «Слой Осколка»: бумага → пробуждение (oskolok≥1 и mesh_on) */
-  function applyOskolokPreset(cfg: NonNullable<Scene['campMap']>) {
-    const oskName = store.project.oskolokVarName || 'oskolok';
-    const vOsk = store.project.variables.find((v) => v.name === oskName);
-    const vMesh = store.project.variables.find((v) => v.name === 'mesh_on');
-    if (!vOsk || !vMesh) {
-      toast(`Нужны переменные «${oskName}» и «mesh_on»`);
-      return;
-    }
-    const awake: Condition[] = [
-      { varId: vOsk.id, op: 'gte', value: 1 },
-      { varId: vMesh.id, op: 'eq', value: true },
-    ];
-    mutate(() => {
-      // база — «бумага»: карандашные контуры, серые маркеры без свечения
-      cfg.nodeLook = {
-        ...(cfg.nodeLook ?? {}),
-        fillOpacity: 3, borderOpacity: 14, markerColor: '#8fa7b5', markerGlow: 0, scrim: 40,
-      };
-      // пробуждение: стекло, перелив, живые маркеры
-      const wake = (cfg.nodeLookIf ?? []).find((li) => li.id === 'ml_oskolok_wake');
-      const wakeLook: CampNodeLook = {
-        fillOpacity: 6, borderOpacity: 30, markerColor: '#4fd1c5', markerGlow: 75, scrim: 55,
-        fx: { surface: 'spatial', glass: 10, border: 'shimmer', tempo: 'slow', intensity: 'quiet' },
-      };
-      if (wake) { wake.conditions = awake; wake.look = wakeLook; }
-      else {
-        cfg.nodeLookIf = [...(cfg.nodeLookIf ?? []),
-          { id: 'ml_oskolok_wake', name: 'Пробуждение (Осколок)', conditions: awake, look: wakeLook }];
-      }
-      // связи: видны только «проснувшись», с бегущим потоком
-      cfg.linkLook = { ...(cfg.linkLook ?? {}), flow: 'run', opacity: 28, tempo: 'slow' };
-      for (const l of cfg.links ?? []) l.visibleIf = awake.map((c) => ({ ...c }));
+      cur.whisper = undefined;
     });
-    store.mapLookPreviewId = 'ml_oskolok_wake'; // холст сразу показывает «пробуждение»
-    store.emit('change');
-    toast('Слой Осколка применён — холст показывает «пробуждение»');
+    sec.appendChild(reset);
+    sec.appendChild(h('div', { class: 'hint', text: 'Раскладка общая на всю игру (не по сцене). Позиции — в % сцены; полоса шёпота Архона двигается по вертикали. Когда элемент виден — решают его собственные правила (Осколок, mesh, тип сцены), чекбокс лишь выключает насовсем.' }));
+    return sec;
   }
 
   // ================= ЗОНА АНОМАЛИИ (C7) =================
@@ -1313,113 +1086,8 @@ export function mountInspector(root: HTMLElement, store: Store) {
   }
 
   // ================= РЕДАКТОРЫ УСЛОВИЙ / ЭФФЕКТОВ =================
-  function varOptions(forEffects = false): [string, string][] {
-    return store.project.variables
-      .filter((v) => !(forEffects && v.category === 'computed')) // вычисляемые менять нельзя
-      .map((v) => [v.id, v.title]);
-  }
-
-  function valueEditor(varId: string, value: VarValue, onChange: (v: VarValue) => void): HTMLElement {
-    const def = store.getVariable(varId);
-    if (def?.type === 'boolean') {
-      return selectInput(String(value === true), [['true', 'да'], ['false', 'нет']], (v) => onChange(v === 'true'));
-    }
-    if (def?.type === 'number') {
-      return numberInput(Number(value) || 0, (v) => onChange(v));
-    }
-    return textInput(String(value ?? ''), (v) => onChange(v));
-  }
-
-  function conditionsEditor(list: Condition[], commit: (list: Condition[]) => void): HTMLElement {
-    const wrap = h('div');
-    list.forEach((c, i) => {
-      const card = h('div', { class: 'cond-card' });
-      const r = h('div', { class: 'row' });
-      r.appendChild(selectInput(c.varId, varOptions(), (v) => {
-        const copy = [...list];
-        const def = store.getVariable(v);
-        copy[i] = { ...c, varId: v, value: def?.type === 'boolean' ? true : def?.type === 'number' ? 0 : '' };
-        commit(copy);
-      }));
-      r.appendChild(selectInput(c.op, [['eq', '='], ['ne', '≠'], ['gt', '>'], ['gte', '≥'], ['lt', '<'], ['lte', '≤']], (v) => {
-        const copy = [...list];
-        copy[i] = { ...c, op: v as Condition['op'] };
-        commit(copy);
-      }));
-      r.appendChild(valueEditor(c.varId, c.value, (v) => {
-        const copy = [...list];
-        copy[i] = { ...c, value: v };
-        commit(copy);
-      }));
-      const del = h('button', { class: 'del', text: '✕' });
-      del.onclick = () => commit(list.filter((_, j) => j !== i));
-      r.appendChild(del);
-      card.appendChild(r);
-      wrap.appendChild(card);
-    });
-    const add = h('button', { class: 'btn small', text: '+ условие' });
-    add.onclick = () => {
-      const first = store.project.variables[0];
-      if (!first) { toast('Сначала создайте переменную (режим «Переменные»)', true); return; }
-      commit([...list, { varId: first.id, op: 'eq', value: first.type === 'boolean' ? true : first.type === 'number' ? 0 : '' }]);
-    };
-    wrap.appendChild(add);
-    return wrap;
-  }
-
-  // допустимые операции зависят от типа переменной — «+»/«−» для булевых значений
-  // молча превращают true/false в число (0/1), и такое значение потом не match'ится
-  // ни с одним условием «=true»/«=false»; для строк осмысленно только «=»
-  function opsForType(type: VarType | undefined): [string, string][] {
-    if (type === 'boolean') return [['set', '='], ['toggle', '⇄']];
-    if (type === 'string') return [['set', '=']];
-    return [['set', '='], ['add', '+'], ['sub', '−'], ['random', '🎲 1..N']];
-  }
-
-  function effectsEditor(list: Effect[], commit: (list: Effect[]) => void): HTMLElement {
-    const wrap = h('div');
-    list.forEach((e, i) => {
-      const card = h('div', { class: 'cond-card' });
-      const r = h('div', { class: 'row' });
-      const type = store.getVariable(e.varId)?.type;
-      r.appendChild(selectInput(e.varId, varOptions(true), (v) => {
-        const copy = [...list];
-        const def = store.getVariable(v);
-        const validOps = opsForType(def?.type).map(([op]) => op);
-        copy[i] = {
-          ...e, varId: v,
-          op: validOps.includes(e.op) ? e.op : 'set',
-          value: def?.type === 'boolean' ? true : def?.type === 'number' ? 0 : '',
-        };
-        commit(copy);
-      }));
-      r.appendChild(selectInput(e.op, opsForType(type), (v) => {
-        const copy = [...list];
-        copy[i] = { ...e, op: v as Effect['op'] };
-        commit(copy);
-      }));
-      if (e.op !== 'toggle') {
-        r.appendChild(valueEditor(e.varId, e.value, (v) => {
-          const copy = [...list];
-          copy[i] = { ...e, value: v };
-          commit(copy);
-        }));
-      }
-      const del = h('button', { class: 'del', text: '✕' });
-      del.onclick = () => commit(list.filter((_, j) => j !== i));
-      r.appendChild(del);
-      card.appendChild(r);
-      wrap.appendChild(card);
-    });
-    const add = h('button', { class: 'btn small', text: '+ эффект' });
-    add.onclick = () => {
-      const first = store.project.variables.find((v) => v.category !== 'computed');
-      if (!first) { toast('Сначала создайте переменную (режим «Переменные»)', true); return; }
-      commit([...list, { varId: first.id, op: first.type === 'number' ? 'add' : 'set', value: first.type === 'boolean' ? true : first.type === 'number' ? 1 : '' }]);
-    };
-    wrap.appendChild(add);
-    return wrap;
-  }
+  // вынесены в condedit.ts (переиспользуются модалками карты)
+  const { conditionsEditor, effectsEditor, valueEditor } = makeCondEffectEditors(store);
 
   // ================= СПРАВКА ПО ПЕРЕМЕННЫМ =================
   function renderVariablesHelp() {

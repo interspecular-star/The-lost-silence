@@ -6,13 +6,17 @@
 import { Store } from '../core/store';
 import {
   Scene, SceneElement, ElementType, Guide, uid, CampMapNode,
-  CANVAS_W, CANVAS_H, ELEMENT_TYPE_LABELS,
+  CANVAS_W, CANVAS_H, ELEMENT_TYPE_LABELS, HUD_DEFAULTS,
 } from '../core/types';
 import { h } from './ui';
 import { renderRichInto, splitRichParagraphs } from '../runtime/textfx';
 import { applyBoxFx, glassBg } from '../runtime/boxfx';
 import { applyTextGuard } from '../runtime/elementfx';
-import { renderDiamond, renderLinksSvg, previewNodeLook, ensureCampMapStyles } from '../runtime/campmap';
+import {
+  renderDiamond, renderLinksSvg, previewNodeLook, ensureCampMapStyles,
+  evalConditionsInitial, markColor,
+} from '../runtime/campmap';
+import { openMapNodeModal } from './mapmodal';
 
 const RULER = 24;
 const SNAP_SCREEN_PX = 7;
@@ -378,6 +382,9 @@ export class StageView {
     // сцена-карта: редактируемый план (выделение/drag/размер/связи), поведение — в F5
     if (scene.campMap) this.canvas.appendChild(this.renderCampMapEditor(scene));
 
+    // раскладка HUD: drag-макеты элементов интерфейса (общие на весь проект)
+    if (this.store.hudEditMode) this.canvas.appendChild(this.renderHudEditor());
+
     if (this.store.gridEnabled) {
       this.canvas.appendChild(h('div', { class: 'grid-overlay' }));
     }
@@ -404,14 +411,15 @@ export class StageView {
     const wrap = h('div', { style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;pointer-events:none;font-size:26px;` });
     const selId = this.store.selectedMapNodeId;
 
-    // связи: живой поток (по чипу ⏯) + клик по линии удаляет
+    const project = this.store.project;
+    // связи: стиль 1:1 как в игре; скрытые на старте — бледнее (но их надо мочь удалить)
     const links = cfg.links ?? [];
     if (links.length) {
       const pos = new Map(cfg.nodes.map((n) => [n.id, { x: n.x, y: n.y }]));
       const svg = renderLinksSvg(cfg, pos, links, {
         animate,
         interactive: true,
-        minOpacity: 45, // рабочий инструмент: связи не должны теряться на фоне-фото
+        isLinkDimmed: (link) => !evalConditionsInitial(project, link.visibleIf),
         onLineClick: (link) => {
           this.store.snapshot();
           cfg.links = (cfg.links ?? []).filter((l) => l !== link);
@@ -422,18 +430,31 @@ export class StageView {
     }
 
     const mkPulse = cfg.marker?.pulse ?? 'current';
-    for (const node of cfg.nodes) {
+    // порядок как в игре: крупные снизу, мелкие сверху; выделенный — поверх всех
+    const drawOrder = [...cfg.nodes].sort((a, b) => (b.size ?? 14) - (a.size ?? 14));
+    const selNode = drawOrder.find((n) => n.id === selId);
+    if (selNode) { drawOrder.splice(drawOrder.indexOf(selNode), 1); drawOrder.push(selNode); }
+    for (const node of drawOrder) {
       const size = node.size ?? 14;
       const hgt = size * 1.6;
       const isHome = node.id === cfg.homeNodeId;
+      // пометка/замок/видимость — «глазами нового игрока» (по стартовым значениям переменных),
+      // кнопка «👁» в редакторе узла может форсировать конкретную пометку
+      const forced = this.store.mapMarkPreview?.nodeId === node.id
+        ? (node.marks ?? []).find((m) => m.id === this.store.mapMarkPreview!.markId) : undefined;
+      const startMark = forced ?? (node.marks ?? []).find((m) => evalConditionsInitial(project, m.conditions));
+      const lockedAtStart = !!node.lockedIf?.length && evalConditionsInitial(project, node.lockedIf);
+      const hiddenAtStart = !evalConditionsInitial(project, node.visibleIf);
       const dia = renderDiamond({
-        look: previewNodeLook(cfg, node, this.store.mapLookPreviewId),
+        look: previewNodeLook(cfg, node, this.store.mapLookPreviewId, isHome),
         marker: cfg.marker,
-        state: node.id === selId ? 'selected' : isHome ? 'current' : 'normal',
+        state: node.id === selId ? 'selected' : (isHome && !cfg.currentLook) ? 'current' : 'normal',
+        locked: lockedAtStart,
         pulsing: mkPulse === 'all' || (mkPulse === 'current' && isHome),
         dimK: Math.max(0.25, 1 - (node.dim ?? 0) / 100),
         title: node.title,
-        markText: node.marks?.[0]?.text ?? '',
+        markText: lockedAtStart && !forced ? '···заперто' : startMark?.text ?? '',
+        markColor: startMark && !(lockedAtStart && !forced) ? markColor(startMark, cfg.marker?.color ?? '#4fd1c5') : undefined,
         titlePx: Math.round(6 + size * 0.95), // логическая сетка холста = игровая
         animate,
       });
@@ -441,9 +462,21 @@ export class StageView {
       dia.style.top = `${node.y - hgt / 2}%`;
       dia.style.width = `${size}%`;
       dia.style.height = `${hgt}%`;
+      if (hiddenAtStart) {
+        dia.style.opacity = String(Number(dia.style.opacity || 1) * 0.35); // в игре скрыт — в редакторе виден призраком
+        const eye = h('div', {
+          text: '👁', title: 'На старте игры узел скрыт (условия видимости)',
+          style: 'position:absolute;top:6%;left:50%;transform:translateX(-50%);font-size:14px;opacity:0.8;pointer-events:none;',
+        });
+        dia.appendChild(eye);
+      }
       const hit = dia.querySelector<HTMLElement>('.cmap-hit')!;
       hit.dataset.mapNodeId = node.id;
       hit.addEventListener('pointerdown', (e) => this.mapNodePointerDown(node, e));
+      hit.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        openMapNodeModal(this.store, scene, node.id);
+      });
       wrap.appendChild(dia);
 
       if (node.id === selId) {
@@ -510,6 +543,103 @@ export class StageView {
     chipBar.appendChild(animChip);
     wrap.appendChild(chipBar);
     return wrap;
+  }
+
+  /** Drag-редактор раскладки HUD: макеты-плейсхолдеры реальных элементов интерфейса.
+   *  Позиции пишутся в project.hud (% сцены) и действуют на всю игру; живое окно
+   *  рядом покажет настоящий HUD через ~1 сек. Полоса шёпота двигается только по Y. */
+  private renderHudEditor(): HTMLElement {
+    const layer = h('div', {
+      style: `position:absolute;left:0;top:0;width:${CANVAS_W}px;height:${CANVAS_H}px;
+        pointer-events:none;background:rgba(2,6,10,0.45);z-index:6;`,
+    });
+    const store = this.store;
+    const hud = () => (store.project.hud ?? (store.project.hud = {}));
+    const boxCss = (hidden: boolean) => `position:absolute;box-sizing:border-box;display:flex;align-items:center;
+      justify-content:center;text-align:center;border:1px dashed rgba(79,209,197,${hidden ? '0.35' : '0.8'});
+      background:rgba(79,209,197,${hidden ? '0.04' : '0.10'});color:#cfe8e5;font-size:15px;
+      cursor:move;pointer-events:auto;user-select:none;border-radius:6px;padding:4px;
+      ${hidden ? 'opacity:0.55;' : ''}`;
+
+    type Key = 'heroBar' | 'currency' | 'factionBtn' | 'meshBtn';
+    const items: { key: Key; label: string; w: number; hgt: number; defX: number; defY: number }[] = [
+      { key: 'factionBtn', label: '◈\nфракции', w: 56, hgt: 56, defX: HUD_DEFAULTS.factionBtn.x, defY: HUD_DEFAULTS.factionBtn.y },
+      { key: 'heroBar', label: 'уровень · HP/FOC · 🎒 · 📋', w: 330, hgt: 62, defX: HUD_DEFAULTS.heroBar.x, defY: HUD_DEFAULTS.heroBar.y },
+      { key: 'currency', label: '⌬ валюта', w: 140, hgt: 46, defX: HUD_DEFAULTS.currency.x, defY: HUD_DEFAULTS.currency.y },
+      { key: 'meshBtn', label: '◈ MESH', w: 62, hgt: 56, defX: HUD_DEFAULTS.meshBtn.x, defY: HUD_DEFAULTS.meshBtn.y },
+    ];
+    const startDrag = (e: PointerEvent, apply: (dxPct: number, dyPct: number) => void) => {
+      if (e.button !== 0) return;
+      e.stopPropagation();
+      const startP = this.toLogical(e.clientX, e.clientY);
+      let moved = false;
+      const move = (ev: PointerEvent) => {
+        const p = this.toLogical(ev.clientX, ev.clientY);
+        const dx = ((p.x - startP.x) / CANVAS_W) * 100;
+        const dy = ((p.y - startP.y) / CANVAS_H) * 100;
+        if (!moved && Math.abs(dx) < 0.15 && Math.abs(dy) < 0.15) return;
+        if (!moved) { store.snapshot(); moved = true; }
+        apply(dx, dy);
+        this.renderCanvas();
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move);
+        window.removeEventListener('pointerup', up);
+        if (moved) store.emit('change');
+      };
+      window.addEventListener('pointermove', move);
+      window.addEventListener('pointerup', up);
+    };
+
+    for (const it of items) {
+      const cfg = store.project.hud?.[it.key];
+      const x = cfg?.x ?? it.defX;
+      const y = cfg?.y ?? it.defY;
+      const hidden = cfg?.show === false;
+      const box = h('div', {
+        style: boxCss(hidden) + `left:${x}%;top:${y}%;width:${it.w}px;height:${it.hgt}px;white-space:pre-line;`,
+        text: it.label + (hidden ? '\n(скрыт)' : ''),
+        title: 'Тащите мышью; видимость — в панели справа («HUD игры»)',
+      });
+      const ox = x, oy = y;
+      box.addEventListener('pointerdown', (e) => startDrag(e, (dx, dy) => {
+        const c = (hud()[it.key] ?? (hud()[it.key] = {}));
+        c.x = Math.round(Math.max(0, Math.min(97, ox + dx)) * 10) / 10;
+        c.y = Math.round(Math.max(0, Math.min(95, oy + dy)) * 10) / 10;
+      }));
+      layer.appendChild(box);
+    }
+
+    // полоса шёпота — на всю ширину, двигается только по вертикали
+    {
+      const y = store.project.hud?.whisper?.y ?? HUD_DEFAULTS.whisperY;
+      const bar = h('div', {
+        style: boxCss(false) + `left:0;top:${y}%;width:100%;height:56px;cursor:ns-resize;border-radius:0;`,
+        text: '◈ полоса шёпота Архона (двигается по вертикали)',
+        title: 'Тащите вверх/вниз',
+      });
+      const oy = y;
+      bar.addEventListener('pointerdown', (e) => startDrag(e, (_dx, dy) => {
+        hud().whisper = { y: Math.round(Math.max(0, Math.min(90, oy + dy)) * 10) / 10 };
+      }));
+      layer.appendChild(bar);
+    }
+
+    const done = h('div', {
+      text: '✓ Готово — раскладка HUD',
+      style: `position:absolute;top:10px;left:50%;transform:translateX(-50%);padding:6px 16px;
+        background:rgba(79,209,197,0.18);border:1px solid rgba(79,209,197,0.6);border-radius:14px;
+        color:#cfe8e5;font-size:13px;cursor:pointer;pointer-events:auto;user-select:none;`,
+    });
+    done.addEventListener('pointerdown', (e) => e.stopPropagation());
+    done.onclick = () => { store.hudEditMode = false; store.emit('selection'); };
+    layer.appendChild(done);
+    layer.appendChild(h('div', {
+      text: 'Раскладка HUD общая на всю игру · позиции в % сцены · «сбросить позиции» — в панели справа',
+      style: `position:absolute;bottom:6px;left:50%;transform:translateX(-50%);font-size:11px;
+        color:rgba(230,237,243,0.55);background:rgba(8,19,26,0.7);padding:3px 10px;border-radius:6px;pointer-events:none;`,
+    }));
+    return layer;
   }
 
   private mapNodePointerDown(node: CampMapNode, e: PointerEvent) {

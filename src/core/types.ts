@@ -161,6 +161,7 @@ export interface CampMapMark {
   id: string;
   text: string;             // маркер в начале задаёт цвет: ◊ — акцент, прочее — приглушённо
   conditions: Condition[];  // пусто — видна всегда
+  color?: string;           // свой цвет (перекрывает правило ◊/·)
 }
 
 /** Узел карты: ромб-локация на плане лагеря */
@@ -239,6 +240,28 @@ export interface CampMapMarkerStyle {
   ringOpacity?: number;
 }
 
+// ---------- HUD: раскладка интерфейса игры (настройки владельца, весь проект) ----------
+export interface HudElementCfg {
+  x?: number;     // % ширины сцены (левый верх); пусто — встроенное место
+  y?: number;     // % высоты
+  show?: boolean; // false — элемент скрыт (по умолчанию показывается по своим правилам)
+}
+export interface HudConfig {
+  heroBar?: HudElementCfg;    // уровень + полосы HP/FOC + 🎒 + 📋
+  currency?: HudElementCfg;   // ⌬ валюта (по умолчанию у правого края)
+  factionBtn?: HudElementCfg; // ◈ панель фракций (Осколок ур.2+)
+  meshBtn?: HudElementCfg;    // тумблер MESH (постоянная кнопка с Осколком)
+  whisper?: { y?: number };   // полоса шёпота Архона: верхний край, % высоты
+}
+/** Встроенные места HUD-элементов (для drag-редактора и рендера, % сцены) */
+export const HUD_DEFAULTS = {
+  heroBar: { x: 4.8, y: 2.5 },
+  currency: { x: 90, y: 2.5 },
+  factionBtn: { x: 2, y: 2.5 },
+  meshBtn: { x: 2, y: 13.5 },
+  whisperY: 8.5,
+} as const;
+
 export interface CampMapConfig {
   nodes: CampMapNode[];
   links?: CampMapLink[];
@@ -247,6 +270,7 @@ export interface CampMapConfig {
   nodeLook?: CampNodeLook;   // вид узлов по умолчанию
   nodeLookIf?: CampNodeLookIf[]; // вид ВСЕЙ карты при условиях (слой Осколка); узловые look/lookIf сильнее
   linkLook?: CampLinkLook;   // вид связей по умолчанию
+  currentLook?: CampNodeLook; // вид узла «текущее положение ГГ» (поверх всего; пусто — акцентная рамка как раньше)
 }
 
 // ---------- Зона аномалии: таймер экспозиции (C7, world-anomalies.md §4) ----------
@@ -689,6 +713,7 @@ export interface Project {
   achievements?: AchievementDef[];
   materials?: MaterialDef[];   // библиотека материалов (H2)
   whispers?: WhisperDef[];     // канал Архона (H3)
+  hud?: HudConfig;             // раскладка HUD (drag-редактор на холсте, блок M)
   playtests?: PlaytestCheckpoint[];
   // имя переменной (name), хранящей уровень Осколка (0 — нет устройства … 4 — следы OldNet)
   oskolokVarName?: string;

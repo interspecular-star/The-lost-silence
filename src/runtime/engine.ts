@@ -927,13 +927,23 @@ export class Engine {
     return this.currentScene?.kind !== 'page';
   }
 
+  /** Позиция HUD-элемента: настройка владельца (project.hud) или встроенное место */
+  private hudXY(cfg: { x?: number; y?: number } | undefined, defLeft: string, defTop: string): { left: string; top: string } {
+    return {
+      left: cfg?.x !== undefined ? `${cfg.x}%` : defLeft,
+      top: cfg?.y !== undefined ? `${cfg.y}%` : defTop,
+    };
+  }
+
   /** Единый HUD-бар: слева уровень/hp/foc + инвентарь, справа кредиты (не на страницах-меню) */
   private renderHeroHUD() {
     if (!this.heroEnabled) return;
     if (!this.hudVisible()) return;
+    if (this.project.hud?.heroBar?.show === false) return;
     const v = (name: string) => Number(this.state[heroVarId(this.project, name) ?? ''] ?? 0);
+    const heroPos = this.hudXY(this.project.hud?.heroBar, 'calc(2% + 2.1em)', '2.5%');
     const wrap = document.createElement('div');
-    wrap.style.cssText = `position:absolute;top:2.5%;left:calc(2% + 2.1em);display:flex;align-items:center;
+    wrap.style.cssText = `position:absolute;top:${heroPos.top};left:${heroPos.left};display:flex;align-items:center;
       gap:0.5em;pointer-events:none;`;
 
     const accent = this.project.theme.accent;
@@ -995,15 +1005,19 @@ export class Engine {
 
     this.hudLayer.appendChild(wrap);
 
-    // валюта — правый край HUD, тихая строка
+    // валюта — правый край HUD, тихая строка (позиция настраивается)
     const curName = this.project.currencyVarName ?? 'credits';
     const curId = heroVarId(this.project, curName);
-    if (curId) {
+    if (curId && this.project.hud?.currency?.show !== false) {
+      const cur = this.project.hud?.currency;
       const cred = document.createElement('div');
       cred.textContent = `⌬ ${Math.floor(Number(this.state[curId] ?? 0))}`;
       cred.title = this.project.variables.find((x) => x.id === curId)?.title ?? 'Кредиты';
-      cred.style.cssText = `position:absolute;top:2.5%;right:2%;height:1.8em;display:flex;
-        align-items:center;color:${accent};opacity:0.85;
+      const anchor = cur?.x !== undefined
+        ? `left:${cur.x}%;` // владелец задал точное место
+        : 'right:2%;';      // встроенное: прижата к правому краю
+      cred.style.cssText = `position:absolute;top:${cur?.y !== undefined ? `${cur.y}%` : '2.5%'};${anchor}
+        height:1.8em;display:flex;align-items:center;color:${accent};opacity:0.85;
         font-size:0.8em;letter-spacing:2px;`;
       this.hudLayer.appendChild(cred);
     }
@@ -1017,11 +1031,13 @@ export class Engine {
     const meshVar = this.project.variables.find((x) => x.name === 'mesh_on');
     if (!meshVar || this.oskolokLevel < 1) return;
     if ((this.currentScene?.kind ?? 'location') === 'page') return;
+    if (this.project.hud?.meshBtn?.show === false) return; // только осознанное решение владельца
+    const meshPos = this.hudXY(this.project.hud?.meshBtn, '2%', '13.5%');
     const accent = this.project.theme.accent;
     const on = !!this.state[meshVar.id];
     const b = document.createElement('div');
     b.title = on ? 'Mesh включён — щёлкните, чтобы выключить' : 'Mesh выключен — щёлкните, чтобы включить';
-    b.style.cssText = `position:absolute;top:13.5%;left:2%;
+    b.style.cssText = `position:absolute;top:${meshPos.top};left:${meshPos.left};
       display:flex;flex-direction:column;align-items:center;justify-content:center;
       width:2.2em;height:1.9em;cursor:pointer;pointer-events:auto;user-select:none;
       opacity:${on ? '0.9' : '0.5'};transition:opacity .15s;`;
@@ -1046,14 +1062,16 @@ export class Engine {
 
   private renderOskolokHUD() {
     if (!this.hudVisible()) return;
+    if (this.project.hud?.factionBtn?.show === false) return;
     const factions = this.project.factions ?? [];
     // панель фракций доступна с ур.2 Осколка
     if (this.oskolokLevel < 2 || factions.length === 0) return;
+    const pos = this.hudXY(this.project.hud?.factionBtn, '2%', '2.5%');
 
     const btn = document.createElement('div');
     btn.textContent = '◈';
     btn.title = 'Осколок: репутация фракций';
-    btn.style.cssText = `position:absolute;top:2.5%;left:2%;width:1.8em;height:1.8em;
+    btn.style.cssText = `position:absolute;top:${pos.top};left:${pos.left};width:1.8em;height:1.8em;
       display:flex;align-items:center;justify-content:center;
       color:${this.project.theme.accent};cursor:pointer;pointer-events:auto;user-select:none;
       opacity:${this.factionPanelOpen ? '1' : '0.7'};transition:opacity .15s;`;
@@ -1064,7 +1082,7 @@ export class Engine {
 
     if (!this.factionPanelOpen) return;
     const panel = document.createElement('div');
-    panel.style.cssText = `position:absolute;top:calc(2.5% + 2.4em);left:2%;min-width:12em;
+    panel.style.cssText = `position:absolute;top:calc(${pos.top} + 2.4em);left:${pos.left};min-width:12em;
       background:rgba(5,9,13,0.94);border:1px solid rgba(255,255,255,0.08);
       border-top:1px solid ${this.project.theme.accent}33;
       padding:0.9em 1.1em;pointer-events:auto;

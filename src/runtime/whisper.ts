@@ -176,6 +176,9 @@ export class WhisperSystem {
 
     const bar = document.createElement('div');
     bar.className = 'ws-bar';
+    // раскладка HUD: владелец может двигать полосу шёпота по вертикали
+    const wsY = this.eng.project.hud?.whisper?.y;
+    if (wsY !== undefined) bar.style.top = `${wsY}%`;
     if (this.eng.isDialogueActive()) bar.classList.add('ws-dimmed');
     const inner = document.createElement('div');
     inner.className = 'ws-inner';
@@ -259,6 +262,8 @@ export class WhisperSystem {
     g.className = 'ws-mini';
     g.textContent = '◈';
     g.title = 'Перечитать последний шёпот';
+    const wsY = this.eng.project.hud?.whisper?.y;
+    if (wsY !== undefined) g.style.top = `${wsY}%`; // глиф живёт на линии полосы
     g.onclick = () => {
       g.remove(); this.glyph = null;
       // повторный показ без чипов, журнала и счётчиков — просто перечитать
