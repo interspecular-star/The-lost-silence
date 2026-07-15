@@ -553,6 +553,14 @@ export function renderCampMap(eng: Engine, scene: Scene, host: HTMLElement) {
           role.style.cssText = 'font-size:0.38em;color:#5f7a8a;margin-top:0.15em;';
           txt.append(nm, role);
           row.append(img, txt);
+          // досье из «кто здесь» — как с портрета в диалоге: Осколок ур.1+ и включённый Mesh
+          if (eng.canReadDossier()) {
+            row.style.cursor = 'pointer';
+            row.title = 'Открыть досье';
+            row.onmouseenter = () => { row.style.background = 'rgba(255,255,255,0.05)'; };
+            row.onmouseleave = () => { row.style.background = ''; };
+            row.onclick = (e) => { e.stopPropagation(); eng.openCharacterProfile(npc.id); };
+          }
           body.appendChild(row);
         }
       }

@@ -479,6 +479,30 @@ export function mountInspector(root: HTMLElement, store: Store) {
       cur.whisper = undefined;
     });
     sec.appendChild(reset);
+
+    // подложка: тёмная плашка под элементами — читаемость на ярких сценах
+    {
+      const card = h('div', { class: 'cond-card' });
+      card.appendChild(h('div', { style: 'font-size:10px;color:var(--text-faint);', text: 'Подложка (читаемость на ярких сценах):' }));
+      const plateOn = (key: 'heroBar' | 'currency' | 'factionBtn' | 'meshBtn', label: string) =>
+        checkbox(store.project.hud?.[key]?.plate === true, (v) => mutate(() => {
+          const c = (hud()[key] ?? (hud()[key] = {}));
+          c.plate = v || undefined;
+        }), label);
+      card.appendChild(plateOn('heroBar', 'под полосами героя'));
+      card.appendChild(plateOn('currency', 'под валютой'));
+      card.appendChild(plateOn('factionBtn', 'под ◈ фракциями'));
+      card.appendChild(plateOn('meshBtn', 'под кнопкой MESH'));
+      const ps = () => (hud().plateStyle ?? (hud().plateStyle = {}));
+      const cur = store.project.hud?.plateStyle ?? {};
+      card.appendChild(row('Скругление', rangeInput(cur.radius ?? 12, 0, 28, 1, (v) => mutate(() => { ps().radius = v; }))));
+      card.appendChild(row('Плотность, %', rangeInput(cur.opacity ?? 55, 0, 100, 1, (v) => mutate(() => { ps().opacity = v; }))));
+      card.appendChild(row('Размытие', rangeInput(cur.blur ?? 8, 0, 20, 1, (v) => mutate(() => { ps().blur = v; }))));
+      card.appendChild(row('Цвет', colorField(cur.color ?? '', (v) => mutate(() => { ps().color = v || undefined; }))));
+      card.appendChild(h('div', { class: 'hint', text: 'Стиль общий на все подложки — интерфейс читается единым. «Размытие» даёт эффект стекла (как spatial-материалы). Смотреть в предпросмотре или живом окне.' }));
+      sec.appendChild(card);
+    }
+
     sec.appendChild(h('div', { class: 'hint', text: 'Раскладка общая на всю игру (не по сцене). Позиции — в % сцены; полоса шёпота Архона двигается по вертикали. Когда элемент виден — решают его собственные правила (Осколок, mesh, тип сцены), чекбокс лишь выключает насовсем.' }));
     return sec;
   }

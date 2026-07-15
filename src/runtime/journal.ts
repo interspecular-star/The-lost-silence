@@ -28,12 +28,14 @@ export function upgradeCost(up: UpgradeDef, level: number): number {
   return Math.round(up.costBase * Math.pow(up.costGrowth, level));
 }
 
-export function renderJournal(engine: Engine, layer: HTMLElement, close: () => void) {
+export type JournalTab = 'quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements' | 'voice';
+
+export function renderJournal(engine: Engine, layer: HTMLElement, close: () => void, initialTab?: JournalTab) {
   const p = engine.project;
   const hasCharacters = (p.npcs?.length ?? 0) > 0;
   const hasAchievements = (p.achievements?.length ?? 0) > 0;
   const hasVoice = (p.whispers?.length ?? 0) > 0;
-  let tab: 'quests' | 'upgrades' | 'oldnet' | 'characters' | 'achievements' | 'voice' = 'quests';
+  let tab: JournalTab = initialTab ?? 'quests';
 
   const backdrop = document.createElement('div');
   backdrop.style.cssText = `position:absolute;inset:0;background:rgba(2,4,6,0.72);
@@ -367,7 +369,8 @@ export function renderJournal(engine: Engine, layer: HTMLElement, close: () => v
       c.style.gap = '0.5em';
       if (met) {
         c.style.cursor = 'pointer';
-        c.onclick = () => engine.openCharacterProfile(npc.id);
+        // из журнала — с возвратом обратно в журнал на эту же вкладку
+        c.onclick = () => engine.openCharacterProfile(npc.id, 'journal');
         c.onmouseenter = () => { c.style.background = 'rgba(255,255,255,0.035)'; };
         c.onmouseleave = () => { c.style.background = 'rgba(255,255,255,0.015)'; };
       } else {

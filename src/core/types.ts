@@ -245,6 +245,14 @@ export interface HudElementCfg {
   x?: number;     // % ширины сцены (левый верх); пусто — встроенное место
   y?: number;     // % высоты
   show?: boolean; // false — элемент скрыт (по умолчанию показывается по своим правилам)
+  plate?: boolean; // тёмная подложка под элементом (читаемость на ярких сценах)
+}
+/** Стиль подложки HUD — один на все элементы, чтобы интерфейс читался единым */
+export interface HudPlateStyle {
+  color?: string;   // цвет (по умолчанию #060b10)
+  opacity?: number; // 0–100 (по умолчанию 55)
+  radius?: number;  // скругление, px логического холста (по умолчанию 12)
+  blur?: number;    // размытие фона за подложкой, px (0 — выключено; по умолчанию 8)
 }
 export interface HudConfig {
   heroBar?: HudElementCfg;    // уровень + полосы HP/FOC + 🎒 + 📋
@@ -252,6 +260,7 @@ export interface HudConfig {
   factionBtn?: HudElementCfg; // ◈ панель фракций (Осколок ур.2+)
   meshBtn?: HudElementCfg;    // тумблер MESH (постоянная кнопка с Осколком)
   whisper?: { y?: number };   // полоса шёпота Архона: верхний край, % высоты
+  plateStyle?: HudPlateStyle; // общий стиль подложек
 }
 /** Встроенные места HUD-элементов (для drag-редактора и рендера, % сцены) */
 export const HUD_DEFAULTS = {

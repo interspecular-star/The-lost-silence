@@ -596,10 +596,15 @@ export class StageView {
       const x = cfg?.x ?? it.defX;
       const y = cfg?.y ?? it.defY;
       const hidden = cfg?.show === false;
+      // подложка включена — макет показывает её скругление и плотность
+      const ps = store.project.hud?.plateStyle ?? {};
+      const plateCss = cfg?.plate
+        ? `border-radius:${ps.radius ?? 12}px;background:color-mix(in srgb, ${ps.color ?? '#060b10'} ${Math.max(20, ps.opacity ?? 55)}%, transparent);border-style:solid;`
+        : '';
       const box = h('div', {
-        style: boxCss(hidden) + `left:${x}%;top:${y}%;width:${it.w}px;height:${it.hgt}px;white-space:pre-line;`,
+        style: boxCss(hidden) + `left:${x}%;top:${y}%;width:${it.w}px;height:${it.hgt}px;white-space:pre-line;` + plateCss,
         text: it.label + (hidden ? '\n(скрыт)' : ''),
-        title: 'Тащите мышью; видимость — в панели справа («HUD игры»)',
+        title: 'Тащите мышью; видимость и подложка — в панели справа («HUD игры»)',
       });
       const ox = x, oy = y;
       box.addEventListener('pointerdown', (e) => startDrag(e, (dx, dy) => {

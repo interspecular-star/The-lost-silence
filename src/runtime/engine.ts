@@ -22,7 +22,7 @@ import {
   materializeHeroStats, computeCells, heroVarId, expNeed, itemIcon, STAT_KEYS,
 } from '../core/hero';
 import { runCombat } from './combat';
-import { renderJournal } from './journal';
+import { renderJournal, JournalTab } from './journal';
 import { renderCampMap, campMapSig } from './campmap';
 
 interface InvCell { itemId: string; qty: number; }
@@ -935,6 +935,19 @@ export class Engine {
     };
   }
 
+  /** Подложка HUD-элемента (читаемость на ярких сценах): включается на элементе,
+   *  стиль общий (hud.plateStyle). Радиус хранится в px логического холста → em. */
+  private hudPlateCss(key: 'heroBar' | 'currency' | 'factionBtn' | 'meshBtn', pad = '0.3em 0.55em'): string {
+    if (!this.project.hud?.[key]?.plate) return '';
+    const ps = this.project.hud?.plateStyle ?? {};
+    const op = Math.max(0, Math.min(100, ps.opacity ?? 55));
+    const rad = Math.max(0, ps.radius ?? 12);
+    const blur = Math.max(0, ps.blur ?? 8);
+    return `padding:${pad};background:color-mix(in srgb, ${ps.color ?? '#060b10'} ${op}%, transparent);
+      border-radius:${(rad / 26).toFixed(3)}em;border:1px solid rgba(255,255,255,0.07);
+      ${blur > 0 ? `backdrop-filter:blur(${blur}px);` : ''}`;
+  }
+
   /** Единый HUD-бар: слева уровень/hp/foc + инвентарь, справа кредиты (не на страницах-меню) */
   private renderHeroHUD() {
     if (!this.heroEnabled) return;
@@ -944,7 +957,7 @@ export class Engine {
     const heroPos = this.hudXY(this.project.hud?.heroBar, 'calc(2% + 2.1em)', '2.5%');
     const wrap = document.createElement('div');
     wrap.style.cssText = `position:absolute;top:${heroPos.top};left:${heroPos.left};display:flex;align-items:center;
-      gap:0.5em;pointer-events:none;`;
+      gap:0.5em;pointer-events:none;${this.hudPlateCss('heroBar')}`;
 
     const accent = this.project.theme.accent;
 
@@ -1018,7 +1031,7 @@ export class Engine {
         : 'right:2%;';      // встроенное: прижата к правому краю
       cred.style.cssText = `position:absolute;top:${cur?.y !== undefined ? `${cur.y}%` : '2.5%'};${anchor}
         height:1.8em;display:flex;align-items:center;color:${accent};opacity:0.85;
-        font-size:0.8em;letter-spacing:2px;`;
+        font-size:0.8em;letter-spacing:2px;${this.hudPlateCss('currency', '0.15em 0.6em')}`;
       this.hudLayer.appendChild(cred);
     }
   }
@@ -1040,7 +1053,8 @@ export class Engine {
     b.style.cssText = `position:absolute;top:${meshPos.top};left:${meshPos.left};
       display:flex;flex-direction:column;align-items:center;justify-content:center;
       width:2.2em;height:1.9em;cursor:pointer;pointer-events:auto;user-select:none;
-      opacity:${on ? '0.9' : '0.5'};transition:opacity .15s;`;
+      opacity:${on ? '0.9' : '0.5'};transition:opacity .15s;
+      ${this.hudPlateCss('meshBtn', '0.15em')}`;
     const g = document.createElement('div');
     g.textContent = '◈';
     g.style.cssText = `font-size:0.85em;line-height:1;color:${on ? accent : '#5f7a8a'};position:relative;`;
@@ -1074,7 +1088,8 @@ export class Engine {
     btn.style.cssText = `position:absolute;top:${pos.top};left:${pos.left};width:1.8em;height:1.8em;
       display:flex;align-items:center;justify-content:center;
       color:${this.project.theme.accent};cursor:pointer;pointer-events:auto;user-select:none;
-      opacity:${this.factionPanelOpen ? '1' : '0.7'};transition:opacity .15s;`;
+      opacity:${this.factionPanelOpen ? '1' : '0.7'};transition:opacity .15s;
+      ${this.hudPlateCss('factionBtn', '0.1em')}`;
     btn.onmouseenter = () => { btn.style.opacity = '1'; };
     btn.onmouseleave = () => { btn.style.opacity = this.factionPanelOpen ? '1' : '0.7'; };
     btn.onclick = () => { this.factionPanelOpen = !this.factionPanelOpen; this.renderHUD(); };
@@ -1572,8 +1587,8 @@ export class Engine {
       img.style.cssText = `width:2.6em;height:2.6em;border-radius:50%;flex:0 0 auto;
         border:1px solid color-mix(in srgb, var(--dbox-name-accent) 55%, transparent);padding:2px;box-sizing:border-box;
         transition:transform .15s;`;
-      // досье — способность Осколка: без него портрет не кликается (лорно: нечем «читать» людей)
-      if (this.oskolokLevel >= 1) {
+      // досье — способность Осколка при включённом Mesh (лорно: чтение людей — mesh-слой)
+      if (this.canReadDossier()) {
         img.style.cursor = 'pointer';
         img.title = 'Открыть профиль персонажа';
         img.onmouseenter = () => { img.style.transform = 'scale(1.08)'; };
@@ -1704,22 +1719,30 @@ export class Engine {
     }
   }
 
-  /** Открыть журнал (закрывает инвентарь) */
-  openJournal() {
+  /** Открыть журнал (закрывает инвентарь); tab — сразу открыть нужную вкладку */
+  openJournal(tab?: JournalTab) {
     this.invOpen = false;
     this.invLayer.innerHTML = '';
-    renderJournal(this, this.invLayer, () => { this.invLayer.innerHTML = ''; this.renderHUD(); });
+    renderJournal(this, this.invLayer, () => { this.invLayer.innerHTML = ''; this.renderHUD(); }, tab);
+  }
+
+  /** Досье читается Осколком (ур.1+) и только при включённом Mesh: интерфейс — mesh-слой */
+  canReadDossier(): boolean {
+    if (this.oskolokLevel < 1) return false;
+    const meshVar = this.project.variables.find((x) => x.name === 'mesh_on');
+    return !meshVar || !!this.state[meshVar.id];
   }
 
   // ---------- профиль персонажа (экран) ----------
-  /** Открыть профиль NPC — из клика по портрету в диалоге или из вкладки «Персонажи» журнала */
-  openCharacterProfile(npcId: string) {
+  /** Открыть профиль NPC — портрет в диалоге, «кто здесь» на карте или журнал.
+   *  backTo 'journal' — закрытие возвращает в журнал на вкладку «Персонажи». */
+  openCharacterProfile(npcId: string, backTo?: 'journal') {
     this.invOpen = false;
     this.invLayer.innerHTML = '';
-    this.renderCharacterProfile(npcId);
+    this.renderCharacterProfile(npcId, backTo);
   }
 
-  private renderCharacterProfile(npcId: string) {
+  private renderCharacterProfile(npcId: string, backTo?: 'journal') {
     const npc = this.project.npcs?.find((n) => n.id === npcId);
     this.invLayer.innerHTML = '';
     if (!npc) return;
@@ -1727,10 +1750,16 @@ export class Engine {
     const faction = npc.factionId ? this.project.factions?.find((f) => f.id === npc.factionId) : undefined;
     const accent = faction?.color ?? this.project.theme.accent;
 
+    // закрытие: из журнала — назад в журнал (вкладка «Персонажи»), иначе просто закрыть
+    const closeProfile = () => {
+      this.invLayer.innerHTML = '';
+      if (backTo === 'journal') this.openJournal('characters');
+      else this.renderHUD();
+    };
     const backdrop = document.createElement('div');
     backdrop.style.cssText = `position:absolute;inset:0;background:rgba(2,4,6,0.72);
       pointer-events:auto;backdrop-filter:blur(3px);`;
-    backdrop.onclick = (e) => { if (e.target === backdrop) { this.invLayer.innerHTML = ''; this.renderHUD(); } };
+    backdrop.onclick = (e) => { if (e.target === backdrop) closeProfile(); };
     this.invLayer.appendChild(backdrop);
 
     const panel = document.createElement('div');
@@ -1741,9 +1770,10 @@ export class Engine {
     backdrop.appendChild(panel);
 
     const close = document.createElement('div');
-    close.textContent = '✕';
+    close.textContent = backTo === 'journal' ? '‹' : '✕';
+    close.title = backTo === 'journal' ? 'Назад в журнал' : 'Закрыть';
     close.style.cssText = 'position:absolute;top:0.8em;right:1em;cursor:pointer;opacity:0.5;font-size:1.1em;z-index:1;';
-    close.onclick = () => { this.invLayer.innerHTML = ''; this.renderHUD(); };
+    close.onclick = closeProfile;
     panel.appendChild(close);
 
     // ---- левая колонка: портрет ----
@@ -1833,19 +1863,29 @@ export class Engine {
       wrap.appendChild(body);
       right.appendChild(wrap);
     };
+    // чтение людей раскрывается по лестнице Осколка (решение владельца, 2026-07-15):
+    // 1 — досье · 2 — характер и сильные стороны · 3 — слабые стороны ·
+    // 4 — страхи и желания · 5 — отношение к OldNet · 6 — отношение к Archon
+    const lvl = this.oskolokLevel;
+    const gated = (minLvl: number, title: string, text?: string) => {
+      if (!text) return;
+      if (lvl >= minLvl) section(title, text);
+      else section(title, `◈ сигнатура не читается — нужен Осколок ур. ${minLvl}`);
+    };
     section('Досье', npc.description);
-    section('Характер', npc.personality);
-    section('Сильные стороны', npc.strengths);
-    section('Слабые стороны', npc.weaknesses);
-    // глубокое чтение людей — способность Осколка ур. 6 (канон oskolok-mesh.md §4)
-    if (this.oskolokLevel >= 6) {
-      section('Страхи', npc.fears);
-      section('Желания', npc.wants);
-    } else if (npc.fears || npc.wants) {
-      section('Страхи и желания', '◈ сигнатура не читается — нужен Осколок ур. 6');
+    gated(2, 'Характер', npc.personality);
+    gated(2, 'Сильные стороны', npc.strengths);
+    gated(3, 'Слабые стороны', npc.weaknesses);
+    if (npc.fears || npc.wants) {
+      if (lvl >= 4) {
+        section('Страхи', npc.fears);
+        section('Желания', npc.wants);
+      } else {
+        section('Страхи и желания', '◈ сигнатура не читается — нужен Осколок ур. 4');
+      }
     }
-    section('Отношение к Archon', npc.archonView);
-    section('Отношение к OldNet', npc.oldnetView);
+    gated(5, 'Отношение к OldNet', npc.oldnetView);
+    gated(6, 'Отношение к Archon', npc.archonView);
 
     if (npc.relationships?.length) {
       const wrap = document.createElement('div');
@@ -1868,7 +1908,7 @@ export class Engine {
         lb.textContent = rel.label;
         lb.style.cssText = 'opacity:0.6;';
         row.append(nm, lb);
-        row.onclick = () => this.renderCharacterProfile(other.id);
+        row.onclick = () => this.renderCharacterProfile(other.id, backTo);
         wrap.appendChild(row);
       }
       right.appendChild(wrap);
